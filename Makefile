@@ -1,29 +1,29 @@
 all: comp
 
-comp: parser.o symtable.o lexer.o
-	g++ -Wall -g symtable.o lexer.o parser.o -o comp
+comp: lexer.o parser.o symboltable.o emitter.o main.cpp
+	g++ -std=c++14 -Wall -g symboltable.o lexer.o parser.o emitter.o main.cpp -lfmt  -o comp 
 
-lexer.o : lexer.c lexer.h parser.h
-	g++ -Wall -g -c lexer.c -o lexer.o
+lexer.o : lexer.cpp lexer.hpp parser.hpp
+	g++ -std=c++14 -Wall -g -c lexer.cpp -o lexer.o -lfmt
 
-symtable.o : symtable.c symtable.h parser.h
-	g++ -Wall -g -c symtable.c -o symtable.o
+symboltable.o : symboltable.cpp symboltable.hpp
+	g++  -std=c++14 -Wall -g -c symboltable.cpp -o symboltable.o -lfmt
 
-parser.o : parser.c symtable.h lexer.h parser.h
-	g++ -Wall -g -c parser.c -o parser.o
+emitter.o : emitter.cpp emitter.hpp
+	g++ -std=c++14 -Wall -g -c emitter.cpp -o emitter.o -lfmt
 
-parser.c parser.h: parser.y 
-	bison -d -o parser.c parser.y
+parser.o : parser.cpp parser.hpp
+	g++ -std=c++14 -Wall -g -c parser.cpp -o parser.o -lfmt
 
-lexer.c lexer.h: lexer.l 
-	flex -o lexer.c --header=lexer.h lexer.l 
+parser.cpp parser.hpp: parser.y 
+	bison -d -o parser.cpp parser.y
+
+lexer.cpp lexer.hpp: lexer.l 
+	flex -o lexer.cpp --header=lexer.hpp lexer.l 
 
 
 .PHONY: clean test
 
-test: test_results_good_original.txt comp tests_good.txt
-	./comp < tests_good.txt > test_results_good_bison.txt
-	diff -s test_results_good_bison.txt test_results_good_original.txt
 
 clean: 
-	-rm -f 	comp lexer.h parser.h comp.o lexer.o parser.o lexer.c parser.c symtable.o test_results_good_bison.txt
+	-rm -f 	comp lexer.h parser.h comp.o lexer.o parser.o lexer.c parser.c symboltable.o test_results_good_bison.txt
