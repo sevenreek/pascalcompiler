@@ -33,47 +33,47 @@ std::string Emitter::getSymbolString(Symbol& s, bool isRef)
     return "<ERROR>";
 }
 
-void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t s2i, bool ref2, size_t s3i, bool ref3)
+void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t s2i, bool ref2, size_t s3i, bool ref3, std::string comment)
 {
     SymbolTable* st = SymbolTable::getDefault();
     char typeChar = st->at(s1i).getVarType()==VarTypes::VT_INT?'i':'r';
     std::string out = fmt::format(
-        "{}.{} {}, {}, {};\n", 
+        "{}.{} {}, {}, {};", 
         operation, 
         typeChar, 
         this->getSymbolString(st->at(s1i), ref1),
         this->getSymbolString(st->at(s2i), ref2),
         this->getSymbolString(st->at(s3i), ref3)
     );
-    this->outputFile << '\t' << out;
-    fmt::print(out);
+    this->outputFile << '\t' << out << " " << comment << "\n";
+    //fmt::print(out);
 }
-void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t s2i, bool ref2)
+void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t s2i, bool ref2, std::string comment)
 {
     SymbolTable* st = SymbolTable::getDefault();
     char typeChar = st->at(s1i).getVarType()==VarTypes::VT_INT?'i':'r';
     std::string out =  fmt::format(
-        "{}.{} {}, {};\n", 
+        "{}.{} {}, {};", 
         operation, 
         typeChar, 
         this->getSymbolString(st->at(s1i), ref1),
         this->getSymbolString(st->at(s2i), ref2)
     );
-    this->outputFile << '\t' << out;
-    fmt::print(out);
+    this->outputFile << '\t' << out << " " << comment << "\n";
+    //fmt::print(out);
 }
-void Emitter::generateCode(std::string operation, size_t s1i, bool ref1)
+void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, std::string comment)
 {
     SymbolTable* st = SymbolTable::getDefault();
     char typeChar = st->at(s1i).getVarType()==VarTypes::VT_INT?'i':'r';
     std::string out =  fmt::format(
-        "{}.{} {};\n", 
+        "{}.{} {};", 
         operation, 
         typeChar, 
         this->getSymbolString(st->at(s1i), ref1)
     );
-    this->outputFile << '\t' << out;
-    fmt::print(out);
+    this->outputFile << '\t' << out << " " << comment << "\n";
+    //fmt::print(out);
 }
 void Emitter::beginProgram()
 {

@@ -136,14 +136,18 @@ statement_list:
 
 statement:
         variable ASSIGNOP expression {
-            Emitter::getDefault()->generateCode("mov", $3, false, $1, false);
+            SymbolTable *st = SymbolTable::getDefault();
+            std::string comment = fmt::format("{} := {}", st->at($1).getDescriptor(), st->at($3).getDescriptor());
+            Emitter::getDefault()->generateCode("mov", $3, false, $1, false, comment);
         }
     |   procedure_statement
     |   compound_statement
     |   IF expression THEN statement ELSE statement
     |   WHILE expression DO statement
     |   WRITE '(' expression ')' {
-            Emitter::getDefault()->generateCode("write", $3, false); 
+            SymbolTable *st = SymbolTable::getDefault();
+            std::string comment = fmt::format("write({})", st->at($3).getDescriptor());
+            Emitter::getDefault()->generateCode("write", $3, false, comment); 
         }
     ;
 
@@ -185,7 +189,8 @@ simple_expression:
                 Symbol& original = st->at($2);
                 size_t negResult = st->getNewTemporaryVariable(original.getVarType());
                 size_t zeroConst = st->insertOrGetNumericalConstant("0");
-                e->generateCode("sub", zeroConst, false, $2, false, negResult, false);
+                std::string comment = fmt::format("-{}", st->at($2).getDescriptor());
+                e->generateCode("sub", zeroConst, false, $2, false, negResult, false, comment);
                 $$ = negResult;
             }
             else { // '+'
@@ -198,19 +203,20 @@ simple_expression:
             Symbol& exp = st->at($1);
             Symbol& trm = st->at($3);
             bool isTempReal = (exp.getVarType() | trm.getVarType()) & VarTypes::VT_REAL; // TODO: CONVERT IF NEEDED
-            size_t opResult = st->getNewTemporaryVariable(isTempReal ? VarTypes::VT_REAL : VarTypes::VT_INT, fmt::format("{}{}{}", exp.getDescriptor(), operatorTokenToString($2), trm.getDescriptor()) );
+            std::string tempDescriptor = fmt::format("{}{}{}", exp.getDescriptor(), operatorTokenToString($2), trm.getDescriptor());
+            size_t opResult = st->getNewTemporaryVariable(isTempReal ? VarTypes::VT_REAL : VarTypes::VT_INT,  tempDescriptor);
             switch($2) {
                 case '-':
-                    e->generateCode("sub", $1, false, $3, false, opResult, false);
+                    e->generateCode("sub", $1, false, $3, false, opResult, false, tempDescriptor);
                 break;
                 case '+':
-                    e->generateCode("add", $1, false, $3, false, opResult, false);
+                    e->generateCode("add", $1, false, $3, false, opResult, false, tempDescriptor);
                 break;
                 case TOK_OR:
-                    e->generateCode("or", $1, false, $3, false, opResult, false);
+                    e->generateCode("or", $1, false, $3, false, opResult, false, tempDescriptor);
                 break;
                 case TOK_AND:
-                    e->generateCode("and", $1, false, $3, false, opResult, false);
+                    e->generateCode("and", $1, false, $3, false, opResult, false, tempDescriptor);
                 break;
                 default:
                     yyerror("Invalid expression operation");
@@ -218,8 +224,6 @@ simple_expression:
             }
             $$ = opResult;
         }
-    |   simple_expression OR term
-    |   simple_expression AND term
     ;
 
 exprop:
@@ -245,16 +249,17 @@ term:
             if(mustConvert) {
                 throw std::runtime_error{"inttoreal is not implemented yet."};
             }
-            size_t newTemp = st->getNewTemporaryVariable(isTempReal?VarTypes::VT_REAL:VarTypes::VT_INT, fmt::format("{}{}{}", trm.getDescriptor(), operatorTokenToString($2), fac.getDescriptor()) );
+            std::string tempDescriptor = fmt::format("{}{}{}", trm.getDescriptor(), operatorTokenToString($2), fac.getDescriptor());
+            size_t newTemp = st->getNewTemporaryVariable(isTempReal?VarTypes::VT_REAL:VarTypes::VT_INT,  tempDescriptor);
             switch($2) {
                 case '*':
-                    e->generateCode("mul", $1, false, $3, false, newTemp, false);
+                    e->generateCode("mul", $1, false, $3, false, newTemp, false, tempDescriptor);
                 break;
                 case '/': case TOK_DIV:
-                    e->generateCode("div", $1, false, $3, false, newTemp, false);
+                    e->generateCode("div", $1, false, $3, false, newTemp, false, tempDescriptor);
                 break;
-                case TOK_MOD:
-                    e->generateCode("mod", $1, false, $3, false, newTemp, false);
+                case TOK_MOD: case '%':
+                    e->generateCode("mod", $1, false, $3, false, newTemp, false, tempDescriptor);
                 break;
             }
         }
