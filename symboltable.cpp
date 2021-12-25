@@ -113,7 +113,7 @@ bool SymbolTable::tryGetSymbolIndex(std::string s, size_t& index)
     if(this->symbols.size() == 0) return false;
     for(size_t i = this->symbols.size()-1; i >= 0; i--)
     {
-        if(this->at(i).getAttribute() == s)
+        if(this->at(i)->getAttribute() == s)
         {
             index = i;
             return true;
@@ -177,18 +177,18 @@ size_t SymbolTable::getNewTemporaryVariable(VarTypes type, std::string descripto
     std::string name = fmt::format("$t{}", this->getNextGlobalTemporaryAndIncrement());
     address_t addr = this->getGlobalAddressAndIncrement(type);
     this->symbols.push_back(Symbol(name, SymbolTypes::ST_ID, type, addr));
-    Symbol &ts = this->at(this->symbols.size()-1);
-    ts.setDescriptor(descriptor);
-    fmt::print("Created new temporary {}({}) of type {} at {} @{}\n", name, ts.getDescriptor(), varTypeEnumToString(type), this->symbols.size()-1, addr);
+    Symbol *ts = this->at(this->symbols.size()-1);
+    ts->setDescriptor(descriptor);
+    fmt::print("Created new temporary {}({}) of type {} at {} @{}\n", name, ts->getDescriptor(), varTypeEnumToString(type), this->symbols.size()-1, addr);
     return this->symbols.size()-1;
 }
-Symbol& SymbolTable::at(size_t index)
+Symbol* SymbolTable::at(size_t index)
 {
-    return this->symbols.at(index);
+    return &this->symbols.at(index);
 }
 void SymbolTable::addToIdentifierListStack(size_t ind)
 {
-    fmt::print("Added '{}'({}) to id list.\n", this->at(ind).getAttribute(), ind);
+    fmt::print("Added '{}'({}) to id list.\n", this->at(ind)->getAttribute(), ind);
     this->identifierListStack.push_back(ind);
 }
 void SymbolTable::clearIdentifierList()
@@ -203,8 +203,8 @@ void SymbolTable::setMemoryIdentifierList(VarTypes type, bool empty)
     for(auto i:this->identifierListStack)
     {
         address_t addr = this->getGlobalAddressAndIncrement(type);
-        fmt::print("\t'{}'({}) @{}\n", this->at(i).getAttribute(), i, addr);
-        this->at(i).placeInMemory(type, addr);
+        fmt::print("\t'{}'({}) @{}\n", this->at(i)->getAttribute(), i, addr);
+        this->at(i)->placeInMemory(type, addr);
     }
     if(empty)
     {

@@ -46,7 +46,7 @@ void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t 
         this->getSymbolString(st->at(s3i), ref3)
     );
     this->outputFile << '\t' << out << " " << comment << "\n";
-    //fmt::print(out);
+    fmt::print("{}\n", comment);
 }
 void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t s2i, bool ref2, std::string comment)
 {
@@ -60,7 +60,7 @@ void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t 
         this->getSymbolString(st->at(s2i), ref2)
     );
     this->outputFile << '\t' << out << " " << comment << "\n";
-    //fmt::print(out);
+    fmt::print("{}\n", comment);
 }
 void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, std::string comment)
 {
@@ -73,7 +73,7 @@ void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, std::st
         this->getSymbolString(st->at(s1i), ref1)
     );
     this->outputFile << '\t' << out << " " << comment << "\n";
-    //fmt::print(out);
+    fmt::print("{}\n", comment);
 }
 void Emitter::beginProgram()
 {

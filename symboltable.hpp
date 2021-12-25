@@ -56,7 +56,7 @@ public:
     size_t insertOrGetSymbolIndex(std::string s);
     size_t insertOrGetNumericalConstant(std::string s);
     size_t getNewTemporaryVariable(VarTypes type, std::string descriptor="");
-    Symbol& at(size_t index);
+    Symbol* at(size_t index);
     void addToIdentifierListStack(size_t index);
     void setMemoryIdentifierList(VarTypes type, bool empty=true);
     void clearIdentifierList();

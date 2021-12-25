@@ -137,8 +137,36 @@ statement_list:
 statement:
         variable ASSIGNOP expression {
             SymbolTable *st = SymbolTable::getDefault();
-            std::string comment = fmt::format("{} := {}", st->at($1).getDescriptor(), st->at($3).getDescriptor());
-            Emitter::getDefault()->generateCode("mov", $3, false, $1, false, comment);
+            Emitter *e = Emitter::getDefault();
+            size_t varIndex = $1;
+            size_t exprIndex = $3;
+            Symbol* var = st->at(varIndex);
+            Symbol* expr = st->at(exprIndex);
+            if(var->getVarType()==VarTypes::VT_INT && expr->getVarType()==VarTypes::VT_REAL) {
+                std::string conversionComment = fmt::format("int({})", expr->getDescriptor());
+                size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_INT, conversionComment);
+                e->generateCode("realtoint", exprIndex, false, convertedIndex, false, conversionComment);
+                exprIndex = convertedIndex;
+                expr = st->at(exprIndex);
+            } else if(var->getVarType()==VarTypes::VT_REAL && expr->getVarType()==VarTypes::VT_INT) {
+                std::string conversionComment = fmt::format("real({})", expr->getDescriptor());
+                size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, conversionComment);
+                e->generateCode("inttoreal", exprIndex, false, convertedIndex, false, conversionComment);
+                exprIndex = convertedIndex;
+                expr = st->at(exprIndex);
+            }
+            else if (var->getVarType()==expr->getVarType()) {
+                // no conversion needed
+            }
+            else {
+                throw std::runtime_error(
+                    fmt::format("Types not set properly in assignment {}:={}", 
+                        varTypeEnumToString(var->getVarType()),  varTypeEnumToString(expr->getVarType())
+                    )
+                );
+            }
+            std::string comment = fmt::format("{}:={}", st->at(varIndex)->getDescriptor(), st->at(exprIndex)->getDescriptor());
+            e->generateCode("mov", exprIndex, false, varIndex, false, comment);
         }
     |   procedure_statement
     |   compound_statement
@@ -146,7 +174,7 @@ statement:
     |   WHILE expression DO statement
     |   WRITE '(' expression ')' {
             SymbolTable *st = SymbolTable::getDefault();
-            std::string comment = fmt::format("write({})", st->at($3).getDescriptor());
+            std::string comment = fmt::format("write({})", st->at($3)->getDescriptor());
             Emitter::getDefault()->generateCode("write", $3, false, comment); 
         }
     ;
@@ -186,10 +214,10 @@ simple_expression:
             if($1=='-') {
                 SymbolTable *st = SymbolTable::getDefault();
                 Emitter *e = Emitter::getDefault();
-                Symbol& original = st->at($2);
-                size_t negResult = st->getNewTemporaryVariable(original.getVarType());
+                Symbol* original = st->at($2);
+                size_t negResult = st->getNewTemporaryVariable(original->getVarType());
                 size_t zeroConst = st->insertOrGetNumericalConstant("0");
-                std::string comment = fmt::format("-{}", st->at($2).getDescriptor());
+                std::string comment = fmt::format("-{}", st->at($2)->getDescriptor());
                 e->generateCode("sub", zeroConst, false, $2, false, negResult, false, comment);
                 $$ = negResult;
             }
@@ -200,23 +228,39 @@ simple_expression:
     |   simple_expression exprop term {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            Symbol& exp = st->at($1);
-            Symbol& trm = st->at($3);
-            bool isTempReal = (exp.getVarType() | trm.getVarType()) & VarTypes::VT_REAL; // TODO: CONVERT IF NEEDED
-            std::string tempDescriptor = fmt::format("{}{}{}", exp.getDescriptor(), operatorTokenToString($2), trm.getDescriptor());
+            Symbol* exp = st->at($1);
+            Symbol* trm = st->at($3);
+            size_t expressionIndex = $1;
+            size_t termIndex = $3;
+            bool isTempReal = (exp->getVarType() | trm->getVarType()) & VarTypes::VT_REAL; // TODO: CONVERT IF NEEDED
+            if(isTempReal) {
+                if(exp->getVarType()==VarTypes::VT_INT) {
+                    size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, fmt::format("real({})", exp->getDescriptor()));
+                    e->generateCode("inttoreal", expressionIndex, false, convertedIndex, false);
+                    expressionIndex = convertedIndex;
+                    exp = st->at(expressionIndex);
+                }
+                else if(trm->getVarType()==VarTypes::VT_INT) {
+                    size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, fmt::format("real({})", trm->getDescriptor()));
+                    e->generateCode("inttoreal", termIndex, false, convertedIndex, false);
+                    termIndex = convertedIndex;
+                    trm = st->at(termIndex);
+                }
+            }
+            std::string tempDescriptor = fmt::format("{}{}{}", exp->getDescriptor(), operatorTokenToString($2), trm->getDescriptor());
             size_t opResult = st->getNewTemporaryVariable(isTempReal ? VarTypes::VT_REAL : VarTypes::VT_INT,  tempDescriptor);
             switch($2) {
                 case '-':
-                    e->generateCode("sub", $1, false, $3, false, opResult, false, tempDescriptor);
+                    e->generateCode("sub", expressionIndex, false, termIndex, false, opResult, false, tempDescriptor);
                 break;
                 case '+':
-                    e->generateCode("add", $1, false, $3, false, opResult, false, tempDescriptor);
+                    e->generateCode("add", expressionIndex, false, termIndex, false, opResult, false, tempDescriptor);
                 break;
                 case TOK_OR:
-                    e->generateCode("or", $1, false, $3, false, opResult, false, tempDescriptor);
+                    e->generateCode("or",  expressionIndex, false, termIndex, false, opResult, false, tempDescriptor);
                 break;
                 case TOK_AND:
-                    e->generateCode("and", $1, false, $3, false, opResult, false, tempDescriptor);
+                    e->generateCode("and", expressionIndex, false, termIndex, false, opResult, false, tempDescriptor);
                 break;
                 default:
                     yyerror("Invalid expression operation");
@@ -242,24 +286,36 @@ term:
     |   term mulop factor {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            Symbol& trm = st->at($1);
-            Symbol& fac = st->at($3);
-            bool isTempReal = trm.getVarType() | fac.getVarType();
-            bool mustConvert = !(trm.getVarType() & fac.getVarType()) & isTempReal;
-            if(mustConvert) {
-                throw std::runtime_error{"inttoreal is not implemented yet."};
+            size_t termIndex = $1;
+            size_t factorIndex = $3;
+            Symbol* trm = st->at(termIndex);
+            Symbol* fac = st->at(factorIndex);
+            bool isTempReal = trm->getVarType() | fac->getVarType();
+            if(isTempReal) {
+                if(trm->getVarType()==VarTypes::VT_INT) {
+                    size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, fmt::format("real({})", trm->getDescriptor()));
+                    e->generateCode("inttoreal", termIndex, false, convertedIndex, false);
+                    termIndex = convertedIndex;
+                    trm = st->at(termIndex);
+                }
+                else if(fac->getVarType()==VarTypes::VT_INT) {
+                    size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, fmt::format("real({})", fac->getDescriptor()));
+                    e->generateCode("inttoreal", factorIndex, false, convertedIndex, false);
+                    factorIndex = convertedIndex;
+                    fac = st->at(factorIndex);
+                }
             }
-            std::string tempDescriptor = fmt::format("{}{}{}", trm.getDescriptor(), operatorTokenToString($2), fac.getDescriptor());
+            std::string tempDescriptor = fmt::format("{}{}{}", trm->getDescriptor(), operatorTokenToString($2), fac->getDescriptor());
             size_t newTemp = st->getNewTemporaryVariable(isTempReal?VarTypes::VT_REAL:VarTypes::VT_INT,  tempDescriptor);
             switch($2) {
                 case '*':
-                    e->generateCode("mul", $1, false, $3, false, newTemp, false, tempDescriptor);
+                    e->generateCode("mul", termIndex, false, factorIndex, false, newTemp, false, tempDescriptor);
                 break;
                 case '/': case TOK_DIV:
-                    e->generateCode("div", $1, false, $3, false, newTemp, false, tempDescriptor);
+                    e->generateCode("div", termIndex, false, factorIndex, false, newTemp, false, tempDescriptor);
                 break;
                 case TOK_MOD: case '%':
-                    e->generateCode("mod", $1, false, $3, false, newTemp, false, tempDescriptor);
+                    e->generateCode("mod", termIndex, false, factorIndex, false, newTemp, false, tempDescriptor);
                 break;
             }
         }
