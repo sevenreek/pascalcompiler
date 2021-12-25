@@ -306,18 +306,19 @@ term:
                 }
             }
             std::string tempDescriptor = fmt::format("{}{}{}", trm->getDescriptor(), operatorTokenToString($2), fac->getDescriptor());
-            size_t newTemp = st->getNewTemporaryVariable(isTempReal?VarTypes::VT_REAL:VarTypes::VT_INT,  tempDescriptor);
+            size_t opResult = st->getNewTemporaryVariable(isTempReal?VarTypes::VT_REAL:VarTypes::VT_INT,  tempDescriptor);
             switch($2) {
                 case '*':
-                    e->generateCode("mul", termIndex, false, factorIndex, false, newTemp, false, tempDescriptor);
+                    e->generateCode("mul", termIndex, false, factorIndex, false, opResult, false, tempDescriptor);
                 break;
                 case '/': case TOK_DIV:
-                    e->generateCode("div", termIndex, false, factorIndex, false, newTemp, false, tempDescriptor);
+                    e->generateCode("div", termIndex, false, factorIndex, false, opResult, false, tempDescriptor);
                 break;
                 case TOK_MOD: case '%':
-                    e->generateCode("mod", termIndex, false, factorIndex, false, newTemp, false, tempDescriptor);
+                    e->generateCode("mod", termIndex, false, factorIndex, false, opResult, false, tempDescriptor);
                 break;
             }
+            $$ = opResult;
         }
     
     ;
