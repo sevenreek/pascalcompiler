@@ -12,7 +12,7 @@ int main()
 {
     SymbolTable st;
     st.setDefault();
-    Emitter e("output.out");
+    Emitter e("output.asm");
     e.setDefault();
     yyparse();
     yylex_destroy();

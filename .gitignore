@@ -4,4 +4,5 @@ lexer.hpp
 parser.cpp
 parser.hpp
 *.out
+*.asm
 comp

@@ -3,12 +3,20 @@ var x:integer;
 var y:real;
 
 begin
-	y:=x;
-	y:=x+1.0;
-	y:=1-2.0;
-	x:=y/1;
-	x:=2.0;
-	x:=1*2.0
+	x:=0;
+	write(x);
+	y:=2*((x+4)-7);
+	write(y);
+	y:=x+1.0 div 3;
+	write(y);
+	y:=1-2.5;
+	write(y);
+	x:=y/4;
+	write(x);
+	x:=10 mod 3;
+	write(x);
+	x:=3*2.0;
+	write(x)
 
 end.
 

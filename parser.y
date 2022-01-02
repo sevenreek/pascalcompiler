@@ -13,6 +13,7 @@
     void yyerror(char *s);
     int yylex(void);
     std::string operatorTokenToString(address_t token);
+    bool isResultReal(Symbol * s1, Symbol *s2);
 }
 %define api.token.prefix {TOK_}
 %define api.value.type {address_t}
@@ -232,7 +233,7 @@ simple_expression:
             Symbol* trm = st->at($3);
             size_t expressionIndex = $1;
             size_t termIndex = $3;
-            bool isTempReal = (exp->getVarType() | trm->getVarType()) & VarTypes::VT_REAL; // TODO: CONVERT IF NEEDED
+            bool isTempReal = isResultReal(exp,trm);
             if(isTempReal) {
                 if(exp->getVarType()==VarTypes::VT_INT) {
                     size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, fmt::format("real({})", exp->getDescriptor()));
@@ -290,7 +291,7 @@ term:
             size_t factorIndex = $3;
             Symbol* trm = st->at(termIndex);
             Symbol* fac = st->at(factorIndex);
-            bool isTempReal = trm->getVarType() | fac->getVarType();
+            bool isTempReal = isResultReal(trm,fac);
             if(isTempReal) {
                 if(trm->getVarType()==VarTypes::VT_INT) {
                     size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, fmt::format("real({})", trm->getDescriptor()));
@@ -342,7 +343,10 @@ factor:
     ;
 
 %%
-
+bool isResultReal(Symbol * s1, Symbol *s2)
+{
+    return (s1->getVarType() | s2->getVarType()) & VarTypes::VT_REAL;
+}
 std::string operatorTokenToString(address_t token)
 {
     switch(token)
