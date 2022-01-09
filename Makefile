@@ -3,7 +3,7 @@ all: comp
 comp: lexer.o parser.o symboltable.o emitter.o main.cpp
 	g++ -std=c++14 -Wall -g symboltable.o lexer.o parser.o emitter.o main.cpp -lfmt  -o comp 
 
-lexer.o : lexer.cpp lexer.hpp parser.hpp
+lexer.o : lexer.cpp parser.hpp
 	g++ -std=c++14 -Wall -g -c lexer.cpp -o lexer.o -lfmt
 
 symboltable.o : symboltable.cpp symboltable.hpp
@@ -12,7 +12,7 @@ symboltable.o : symboltable.cpp symboltable.hpp
 emitter.o : emitter.cpp emitter.hpp
 	g++ -std=c++14 -Wall -g -c emitter.cpp -o emitter.o -lfmt
 
-parser.o : parser.cpp parser.hpp
+parser.o : parser.cpp 
 	g++ -std=c++14 -Wall -g -c parser.cpp -o parser.o -lfmt
 
 parser.cpp parser.hpp: parser.y 

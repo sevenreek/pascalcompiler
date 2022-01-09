@@ -14,21 +14,21 @@ Emitter* Emitter::getDefault()
 {
     return Emitter::instance;
 }
-std::string Emitter::getSymbolString(Symbol& s, bool isRef)
+std::string Emitter::getSymbolString(Symbol* s, bool isRef)
 {
-    if(s.getSymbolType()==SymbolTypes::ST_ID)
+    if(s->getSymbolType()==SymbolTypes::ST_ID)
     {
         if(isRef) {
-            return fmt::format("*{}", s.getAddress());
+            return fmt::format("*{}", s->getAddress());
         }
         else {
-            return fmt::format("{}", s.getAddress());
+            return fmt::format("{}", s->getAddress());
         }
         
     }
-    else if(s.getSymbolType()==SymbolTypes::ST_NUM)
+    else if(s->getSymbolType()==SymbolTypes::ST_NUM)
     {
-        return fmt::format("#{}", s.getAttribute());
+        return fmt::format("#{}", s->getAttribute());
     }
     return "<ERROR>";
 }
@@ -36,7 +36,7 @@ std::string Emitter::getSymbolString(Symbol& s, bool isRef)
 void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t s2i, bool ref2, size_t s3i, bool ref3, std::string comment)
 {
     SymbolTable* st = SymbolTable::getDefault();
-    char typeChar = st->at(s1i).getVarType()==VarTypes::VT_INT?'i':'r';
+    char typeChar = st->at(s1i)->getVarType()==VarTypes::VT_INT?'i':'r';
     std::string out = fmt::format(
         "{}.{} {}, {}, {};", 
         operation, 
@@ -51,7 +51,7 @@ void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t 
 void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t s2i, bool ref2, std::string comment)
 {
     SymbolTable* st = SymbolTable::getDefault();
-    char typeChar = st->at(s1i).getVarType()==VarTypes::VT_INT?'i':'r';
+    char typeChar = st->at(s1i)->getVarType()==VarTypes::VT_INT?'i':'r';
     std::string out =  fmt::format(
         "{}.{} {}, {};", 
         operation, 
@@ -65,12 +65,27 @@ void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, size_t 
 void Emitter::generateCode(std::string operation, size_t s1i, bool ref1, std::string comment)
 {
     SymbolTable* st = SymbolTable::getDefault();
-    char typeChar = st->at(s1i).getVarType()==VarTypes::VT_INT?'i':'r';
+    char typeChar = st->at(s1i)->getVarType()==VarTypes::VT_INT?'i':'r';
     std::string out =  fmt::format(
         "{}.{} {};", 
         operation, 
         typeChar, 
         this->getSymbolString(st->at(s1i), ref1)
+    );
+    this->outputFile << '\t' << out << " " << comment << "\n";
+    fmt::print("{}\n", comment);
+}
+void Emitter::generateCodeConst(std::string operation, size_t s1i, bool ref1, std::string constval, size_t s3i, bool ref3, std::string comment)
+{
+    SymbolTable* st = SymbolTable::getDefault();
+    char typeChar = st->at(s1i)->getVarType()==VarTypes::VT_INT?'i':'r';
+    std::string out = fmt::format(
+        "{}.{} {}, {}, {};", 
+        operation, 
+        typeChar, 
+        this->getSymbolString(st->at(s1i), ref1),
+        constval,
+        this->getSymbolString(st->at(s3i), ref3)
     );
     this->outputFile << '\t' << out << " " << comment << "\n";
     fmt::print("{}\n", comment);

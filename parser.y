@@ -5,6 +5,7 @@
     #include "emitter.hpp"
     #include <exception>
     #include <string>
+    #include <tuple>
     #include <fmt/format.h>
 }
 
@@ -86,8 +87,25 @@ declarations:
     ;
 
 type:
-    standard_type {$$ = $1;}
-    | ARRAY '[' NUM '.' '.' NUM ']' OF standard_type
+        standard_type {
+            SymbolTable::getDefault()->setCurrentArraySize({0,0});
+            $$ = $1;
+        }
+    |   ARRAY '[' NUM '.' '.' NUM ']' OF standard_type {
+            SymbolTable *st = SymbolTable::getDefault();
+            Symbol* startSym = st->at($3);
+            Symbol* endSym = st->at($6);
+            if(startSym->getVarType() != VarTypes::VT_INT || endSym->getVarType() != VarTypes::VT_INT) {
+                throw std::runtime_error(fmt::format("Expected integer type in array type bounds."));
+            }
+            size_t start = std::stoi(startSym->getAttribute());
+            size_t end = std::stoi(endSym->getAttribute());
+            if(start > end) {
+                throw std::runtime_error(fmt::format("Expected increasing array bounds."));
+            }
+            st->setCurrentArraySize({start, end});
+            $$ = $9;
+        }
     ;
 
 standard_type:
@@ -176,13 +194,39 @@ statement:
     |   WRITE '(' expression ')' {
             SymbolTable *st = SymbolTable::getDefault();
             std::string comment = fmt::format("write({})", st->at($3)->getDescriptor());
-            Emitter::getDefault()->generateCode("write", $3, false, comment); 
+            Emitter::getDefault()->generateCode("write", $3, st->at($3)->getIsReference(), comment); 
         }
     ;
 
 variable:
         ID {$$ = $1;}
-    |   ID '[' expression ']'
+    |   ID '[' expression ']' {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            size_t expressionIndex = $3;
+            size_t arrayIndex = $1;
+            Symbol* expression = st->at(expressionIndex);
+            Symbol* array = st->at(arrayIndex);
+            if(!array->isArray()) {
+                throw std::runtime_error(fmt::format("{} is not an array.", array->getDescriptor()));
+            }
+            if(expression->getVarType() != VarTypes::VT_INT) { // convert to int maybe?
+                throw std::runtime_error(fmt::format("Array index must be integer."));
+            }
+            std::string comment = fmt::format("{}[{}]", array->getDescriptor(), expression->getDescriptor());
+            size_t arrayIndexTemp = st->getNewTemporaryVariable(VarTypes::VT_INT, comment); 
+            size_t arrayStart = std::get<0>(array->getArrayBounds());
+            int varSize = varTypeToSize(array->getVarType());
+            comment = fmt::format("CALC_ARRAY_OFFSET({}-{})", expression->getDescriptor(), arrayStart);
+            e->generateCodeConst("sub.i", expressionIndex, false, fmt::format("#{}", arrayStart), arrayIndexTemp, false, comment);
+            comment = fmt::format("CALC_ARRAY_OFFSET(({}-{})*{})", expression->getDescriptor(), arrayStart, varSize);
+            e->generateCodeConst("mul.i", arrayIndexTemp, false, fmt::format("#{}", varSize), arrayIndexTemp, false, comment);
+            comment = fmt::format("{}[{}]", array->getDescriptor(), expression->getDescriptor());
+            e->generateCodeConst("add.i", arrayIndexTemp, false, fmt::format("#{}", array->getAddress()), arrayIndexTemp, false, comment);
+            st->at(arrayIndexTemp)->setIsReference(true);
+            st->at(arrayIndexTemp)->setVarType(array->getVarType()); // change to double if needed
+            $$ = arrayIndexTemp;
+        }
     ;
 
 procedure_statement:

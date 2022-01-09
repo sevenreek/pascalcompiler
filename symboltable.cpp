@@ -15,18 +15,20 @@ std::string varTypeEnumToString(VarTypes t)
             return "<BADTYPE>";
     }
 }
-int varTypeToSize(VarTypes t)
+int varTypeToSize(VarTypes t, size_t arraySize)
 {
+    size_t memorySize = 4;
     switch(t)
     {
         case VarTypes::VT_INT:
-            return 4;
+            memorySize = 4;
         break;
         case VarTypes::VT_REAL:
-            return 8;
+            memorySize = 8;
         break;
     }
-    return 4;
+    if(arraySize) memorySize*=arraySize;
+    return memorySize;
 }
 Symbol::Symbol(std::string attr, SymbolTypes type) : attribute(attr), symbolType(type) 
 {
@@ -43,6 +45,10 @@ Symbol::Symbol(std::string attr, SymbolTypes stype, VarTypes vtype, address_t ad
 Symbol::~Symbol()
 {
 
+}
+void Symbol::setArrayBounds(std::tuple<size_t, size_t> bounds)
+{
+    this->arrayBounds = bounds;
 }
 bool Symbol::isInMemory()
 {
@@ -82,7 +88,26 @@ void Symbol::setDescriptor(std::string desc)
 {
     this->descriptor = desc;
 }
-
+bool Symbol::isArray()
+{
+    return (std::get<0>(this->arrayBounds) != 0) || (std::get<1>(this->arrayBounds) != 0);
+}
+void Symbol::setIsReference(bool ref)
+{
+    this->isReference = ref;
+}
+bool Symbol::getIsReference()
+{
+    return this->isReference;
+}
+void Symbol::setVarType(VarTypes vt)
+{
+    this->varType = vt;
+}
+std::tuple<size_t, size_t> Symbol::getArrayBounds()
+{
+    return this->arrayBounds;
+}
 
 SymbolTable* SymbolTable::instance = nullptr;
 SymbolTable::SymbolTable()
@@ -97,10 +122,10 @@ void SymbolTable::setDefault()
 {
     SymbolTable::instance = this;
 }
-address_t SymbolTable::getGlobalAddressAndIncrement(VarTypes type)
+address_t SymbolTable::getGlobalAddressAndIncrement(VarTypes type, size_t arraySize)
 {
     address_t returnValue = this->lastGlobalAddress;
-    this->lastGlobalAddress += varTypeToSize(type);
+    this->lastGlobalAddress += varTypeToSize(type, arraySize);
     return returnValue;
 }
 
@@ -170,7 +195,11 @@ size_t SymbolTable::insertOrGetNumericalConstant(std::string s)
 }
 size_t SymbolTable::getNextGlobalTemporaryAndIncrement()
 {
-    return nextGlobalTemporaryIndex++;
+    return this->nextGlobalTemporaryIndex++;
+}
+size_t SymbolTable::getNextLabelIndex()
+{
+    return this->nextLabel++;
 }
 size_t SymbolTable::getNewTemporaryVariable(VarTypes type, std::string descriptor)
 {
@@ -199,15 +228,48 @@ void SymbolTable::clearIdentifierList()
 
 void SymbolTable::setMemoryIdentifierList(VarTypes type, bool empty)
 {
-    fmt::print("Pushing id list to memory with type {}:\n", varTypeEnumToString( type ));
+    size_t aStart = std::get<0>(this->arrayBounds);
+    size_t aEnd = std::get<1>(this->arrayBounds);
+    if(this->isTypeArray()) {
+        fmt::print(
+            "Pushing id list to memory with type {}[{}..{}]:\n", 
+            varTypeEnumToString( type ), aStart, aEnd);
+    }
+    else {
+        fmt::print("Pushing id list to memory with type {}:\n", varTypeEnumToString( type ));
+    }
     for(auto i:this->identifierListStack)
     {
-        address_t addr = this->getGlobalAddressAndIncrement(type);
-        fmt::print("\t'{}'({}) @{}\n", this->at(i)->getAttribute(), i, addr);
-        this->at(i)->placeInMemory(type, addr);
+        if(this->isTypeArray()) {
+            address_t addr = this->getGlobalAddressAndIncrement(type, aEnd-aStart+1); // maybe remove +1???
+            fmt::print("\t'{}'({}) @{}\n", this->at(i)->getAttribute(), i, addr);
+            this->at(i)->placeInMemory(type, addr);
+            this->at(i)->setArrayBounds({aStart,aEnd});
+        }
+        else {
+            address_t addr = this->getGlobalAddressAndIncrement(type); 
+            fmt::print("\t'{}'({}) @{}\n", this->at(i)->getAttribute(), i, addr);
+            this->at(i)->placeInMemory(type, addr);
+        }
+        
     }
     if(empty)
     {
         this->clearIdentifierList();
     }
 }
+
+
+void SymbolTable::setCurrentArraySize(std::tuple<size_t, size_t> bounds)
+{
+    this->arrayBounds = bounds;
+}
+std::tuple<size_t, size_t> SymbolTable::getCurrentArraySize()
+{
+    return this->arrayBounds;
+}
+bool SymbolTable::isTypeArray()
+{
+    return (std::get<0>(this->arrayBounds) != 0) || (std::get<1>(this->arrayBounds) != 0);
+}
+
