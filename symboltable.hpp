@@ -2,8 +2,9 @@
 #include <vector>
 #include <string>
 #include <tuple>
-#define address_t unsigned long
-const size_t NO_ADDRESS = -1;
+#include <climits>
+#define address_t long
+const address_t NO_ADDRESS = LONG_MAX;
 enum VarTypes {
     VT_NOTYPE = 0,
     VT_INT = 1,

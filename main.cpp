@@ -2,6 +2,7 @@
 #include "lexer.hpp"
 #include <iostream>
 #include <fmt/format.h>
+#include <exception>
 
 void yyerror(char *s)
 {
@@ -14,7 +15,11 @@ int main()
     st.setDefault();
     Emitter e("output.asm");
     e.setDefault();
-    yyparse();
+    try {
+      yyparse();
+    } catch (const std::runtime_error& e) {
+      fmt::print("error @{}: {}\n", yylineno, e.what());
+    }
     yylex_destroy();
     exit(0);
 }

@@ -26,6 +26,9 @@ int varTypeToSize(VarTypes t, size_t arraySize)
         case VarTypes::VT_REAL:
             memorySize = 8;
         break;
+        default:
+            throw std::runtime_error(fmt::format("Unkown VarType enum {}", t));
+        break;
     }
     if(arraySize) memorySize*=arraySize;
     return memorySize;
