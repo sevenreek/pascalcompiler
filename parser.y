@@ -11,7 +11,7 @@
 
 %code provides {
     const static size_t NO_SYMBOL = -1;
-    void yyerror(char *s);
+    void yyerror(std::string s);
     int yylex(void);
     std::string operatorTokenToString(address_t token);
     bool isResultReal(Symbol * s1, Symbol *s2);
@@ -79,7 +79,7 @@ declarations:
                     t = VarTypes::VT_REAL;
                 break;
                 default:
-                    yyerror("Bad type");
+                    throw std::runtime_error(fmt::format("Bad type"));
                 break;
             }
             SymbolTable::getDefault()->setMemoryIdentifierList(t);
@@ -184,7 +184,30 @@ statement:
         }
     |   procedure_statement
     |   compound_statement
-    |   IF expression THEN statement ELSE statement
+    |   IF expression THEN   {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            size_t expressionIndex = $2;
+            Symbol * expression = st->at(expressionIndex);
+            if(expression->getVarType()==VarTypes::VT_REAL) {
+                expressionIndex = convertToInt(expressionIndex);
+                expression = st->at(expressionIndex);
+            }
+            std::string labelElse = fmt::format("lab{}_else", st->getNextLabelIndex());
+            e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelElse), "");
+        } statement ELSE  {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            std::string labelElse = fmt::format("lab{}_else", st->getLastLabelIndex());
+            std::string labelAfter = fmt::format("lab{}_endif", st->getNextLabelIndex());
+            e->generateRaw(fmt::format("\tjump.i #{};", labelAfter));
+            e->generateRaw(fmt::format("{}:", labelElse));
+        } statement {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            std::string labelAfter = fmt::format("lab{}_endif", st->getLastLabelIndex());
+            e->generateRaw(fmt::format("{}:", labelAfter));
+        }
     |   WHILE expression DO statement
     |   WRITE '(' expression ')' {
             SymbolTable *st = SymbolTable::getDefault();
@@ -262,7 +285,6 @@ expression:
             }
             std::string tempDescriptor = fmt::format("{}{}{}", e1->getDescriptor(), operatorTokenToString($2), e2->getDescriptor());
             size_t opResultIndex = st->getNewTemporaryVariable(VarTypes::VT_INT,  tempDescriptor);
-            Symbol* opResult = st->at(opResultIndex);
             std::string labelTrue = fmt::format("lab{}_true", st->getNextLabelIndex());
             std::string trueHash = fmt::format("#{}", labelTrue);
             std::string labelAfter = fmt::format("lab{}_end", st->getNextLabelIndex());
@@ -287,7 +309,7 @@ expression:
                 break;
             }
             e->generateCodeConst("mov", "#0", opResultIndex, "");
-            e->generateRaw(fmt::format("\tjump.i #{}", labelAfter));
+            e->generateRaw(fmt::format("\tjump.i #{};", labelAfter));
             e->generateRaw(fmt::format("{}:", labelTrue));
             e->generateCodeConst("mov", "#1", opResultIndex, "");
             e->generateRaw(fmt::format("{}:", labelAfter));
@@ -440,7 +462,6 @@ factor:
                 factor = st->at(factorIndex);
             }
             size_t opResultIndex = st->getNewTemporaryVariable(VarTypes::VT_INT,  fmt::format("!{}", factor->getDescriptor()));
-            Symbol* opResult = st->at(opResultIndex);
             std::string labelTrue = fmt::format("lab{}_totrue", st->getNextLabelIndex());
             std::string trueHash = fmt::format("#{}", labelTrue);
             std::string labelAfter = fmt::format("lab{}_end", st->getNextLabelIndex());
@@ -463,13 +484,15 @@ std::string operatorTokenToString(address_t token)
 {
     switch(token)
     {
-        case TOK_OR :   return "or";
-        case TOK_AND:   return "and";
+        case TOK_OR :   return " or ";
+        case TOK_AND:   return " and ";
         case TOK_LE :   return "<=";
         case TOK_GE :   return ">=";
+        case '<' :   return "<";
+        case '>' :   return ">";
         case TOK_NEQ:   return "!=";
-        case TOK_DIV:   return "div";
-        case TOK_MOD:   return "mod";
+        case TOK_DIV:   return " div ";
+        case TOK_MOD:   return " mod ";
         case '=' :      return "==";
         case '%':       return "%";
         case '*':       return "*";

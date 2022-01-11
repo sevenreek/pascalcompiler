@@ -142,9 +142,11 @@ void Emitter::generateRaw(std::string raw)
 void Emitter::beginProgram()
 {
     fmt::print("Begin program\n");
-    SymbolTable::getDefault()->clearIdentifierList(); // idlist is filled with input output
-    this->outputFile << fmt::format("jump.i #main;\n");
-    this->outputFile << fmt::format("main:\n");
+    SymbolTable *st = SymbolTable::getDefault();
+    st->clearIdentifierList(); // idlist is filled with input output
+    std::string label = fmt::format("lab{}",st->getNextLabelIndex());
+    this->outputFile << fmt::format("\tjump.i #{};\n", label);
+    this->outputFile << fmt::format("{}:\n", label);
 }
 void Emitter::endProgram()
 {

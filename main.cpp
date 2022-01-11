@@ -4,10 +4,9 @@
 #include <fmt/format.h>
 #include <exception>
 
-void yyerror(char *s)
+void yyerror(std::string s)
 {
   throw std::runtime_error(s);
-  exit(1);
 }
 int main()
 {

@@ -204,6 +204,10 @@ size_t SymbolTable::getNextLabelIndex()
 {
     return this->nextLabel++;
 }
+size_t SymbolTable::getLastLabelIndex()
+{
+    return this->nextLabel - 1;
+}
 size_t SymbolTable::getNewTemporaryVariable(VarTypes type, std::string descriptor)
 {
     std::string name = fmt::format("$t{}", this->getNextGlobalTemporaryAndIncrement());
