@@ -39,7 +39,6 @@ mathop      [\-\+\/\*\%]
 "<>"            return TOK_NEQ;
 "div"           return TOK_DIV;
 "mod"           return TOK_MOD;
-"=="            return TOK_EQ;
 {id}            {
                     std::string parsedText(yytext);
                     int idPosition = SymbolTable::getDefault()->insertOrGetSymbolIndex(parsedText);
@@ -58,6 +57,7 @@ mathop      [\-\+\/\*\%]
                     yylval = idPosition;
                     return TOK_NUM;
                 }
+\n              {} // yylineno
 .               return yytext[0];
 
 %%

@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/comp",
-            "args": ["<p1.pas"],
+            "args": ["<p2.pas"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "externalConsole": false,
