@@ -3,6 +3,7 @@
 #include <string>
 #include <tuple>
 #include <climits>
+#include <stack>
 #define address_t long
 const address_t NO_ADDRESS = LONG_MAX;
 enum VarTypes {
@@ -58,6 +59,7 @@ private:
     size_t getNextGlobalTemporaryAndIncrement();
     std::vector<size_t> identifierListStack;
     std::tuple<size_t, size_t> arrayBounds = {0,0};
+    std::stack<size_t> labelStack;
 public:
     SymbolTable();
     ~SymbolTable();
@@ -74,6 +76,8 @@ public:
     void clearIdentifierList();
     size_t getNextLabelIndex();
     size_t getLastLabelIndex();
+    size_t pushNextLabelIndex();
+    size_t popLabelIndex();
     void setCurrentArraySize(std::tuple<size_t, size_t> bounds);
     std::tuple<size_t, size_t> getCurrentArraySize();
     bool isTypeArray();
