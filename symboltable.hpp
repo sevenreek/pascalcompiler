@@ -75,7 +75,6 @@ public:
     void setMemoryIdentifierList(VarTypes type, bool empty=true);
     void clearIdentifierList();
     size_t getNextLabelIndex();
-    size_t getLastLabelIndex();
     size_t pushNextLabelIndex();
     size_t popLabelIndex();
     void setCurrentArraySize(std::tuple<size_t, size_t> bounds);

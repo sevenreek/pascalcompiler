@@ -12,7 +12,7 @@ int main()
 {
     SymbolTable st;
     st.setDefault();
-    Emitter e("output.asm");
+    Emitter e("myoutput.asm");
     e.setDefault();
     try {
       yyparse();

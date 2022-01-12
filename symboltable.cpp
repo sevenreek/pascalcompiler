@@ -204,10 +204,7 @@ size_t SymbolTable::getNextLabelIndex()
 {
     return this->nextLabel++;
 }
-size_t SymbolTable::getLastLabelIndex()
-{
-    return this->nextLabel - 1;
-}
+
 size_t SymbolTable::pushNextLabelIndex()
 {
     size_t index = this->nextLabel++;

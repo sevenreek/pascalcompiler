@@ -193,22 +193,43 @@ statement:
                 expressionIndex = convertToInt(expressionIndex);
                 expression = st->at(expressionIndex);
             }
-            std::string labelElse = fmt::format("lab{}_else", st->getNextLabelIndex());
+            std::string labelElse = fmt::format("lab{}_else", st->pushNextLabelIndex());
             e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelElse), "");
         } statement ELSE  {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelElse = fmt::format("lab{}_else", st->getLastLabelIndex());
-            std::string labelAfter = fmt::format("lab{}_endif", st->getNextLabelIndex());
+            std::string labelElse = fmt::format("lab{}_else", st->popLabelIndex());
+            std::string labelAfter = fmt::format("lab{}_endif", st->pushNextLabelIndex());
             e->generateRaw(fmt::format("\tjump.i #{};", labelAfter));
             e->generateRaw(fmt::format("{}:", labelElse));
         } statement {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelAfter = fmt::format("lab{}_endif", st->getLastLabelIndex());
+            std::string labelAfter = fmt::format("lab{}_endif", st->popLabelIndex());
             e->generateRaw(fmt::format("{}:", labelAfter));
         }
-    |   WHILE expression DO statement
+    |   WHILE expression {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->pushNextLabelIndex());
+            std::string labelWhile = fmt::format("lab{}_while", st->pushNextLabelIndex());
+            size_t expressionIndex = $2;
+            Symbol * expression = st->at(expressionIndex);
+            if(expression->getVarType()==VarTypes::VT_REAL) {
+                expressionIndex = convertToInt(expressionIndex);
+                expression = st->at(expressionIndex);
+            }
+            e->generateRaw(fmt::format("{}:", labelWhile));
+            e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelEndWhile), "");
+        } DO statement {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            std::string labelWhile = fmt::format("lab{}_while", st->popLabelIndex());
+            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->popLabelIndex());
+            e->generateRaw(fmt::format("\tjump.i #{};", labelWhile));
+            e->generateRaw(fmt::format("{}:", labelEndWhile));
+
+        }
     |   WRITE '(' expression ')' {
             SymbolTable *st = SymbolTable::getDefault();
             std::string comment = fmt::format("write({})", st->at($3)->getDescriptor());
@@ -236,11 +257,11 @@ variable:
             size_t arrayStart = std::get<0>(array->getArrayBounds());
             int varSize = varTypeToSize(array->getVarType());
             comment = fmt::format("CALC_ARRAY_OFFSET({}-{})", expression->getDescriptor(), arrayStart);
-            e->generateCodeConst("sub.i", expressionIndex, fmt::format("#{}", arrayStart), arrayIndexTemp, comment);
+            e->generateCodeConst("sub", expressionIndex, fmt::format("#{}", arrayStart), arrayIndexTemp, comment);
             comment = fmt::format("CALC_ARRAY_OFFSET(({}-{})*{})", expression->getDescriptor(), arrayStart, varSize);
-            e->generateCodeConst("mul.i", arrayIndexTemp, fmt::format("#{}", varSize), arrayIndexTemp, comment);
+            e->generateCodeConst("mul", arrayIndexTemp, fmt::format("#{}", varSize), arrayIndexTemp, comment);
             comment = fmt::format("{}[{}]", array->getDescriptor(), expression->getDescriptor());
-            e->generateCodeConst("add.i", arrayIndexTemp, fmt::format("#{}", array->getAddress()), arrayIndexTemp, comment);
+            e->generateCodeConst("add", arrayIndexTemp, fmt::format("#{}", array->getAddress()), arrayIndexTemp, comment);
             st->at(arrayIndexTemp)->setIsReference(true);
             st->at(arrayIndexTemp)->setVarType(array->getVarType()); // change to double if needed
             $$ = arrayIndexTemp;
@@ -277,10 +298,10 @@ expression:
                     e2 = st->at(e2i);
                 }
                 else if(e1->getVarType()==VarTypes::VT_REAL && e2->getVarType()==VarTypes::VT_REAL) {
-                    // all good baby...
+                    // all good 
                 }
                 else {   
-                    throw std::runtime_error(fmt::format("Unkown type conversion."));
+                    throw std::runtime_error(fmt::format("Unknown type conversion in {}{}{}", e1->getDescriptor(), operatorTokenToString($2), e2->getDescriptor()));
                 }
             }
             std::string tempDescriptor = fmt::format("{}{}{}", e1->getDescriptor(), operatorTokenToString($2), e2->getDescriptor());
@@ -335,9 +356,8 @@ simple_expression:
                 Emitter *e = Emitter::getDefault();
                 Symbol* original = st->at($2);
                 size_t negResult = st->getNewTemporaryVariable(original->getVarType());
-                size_t zeroConst = st->insertOrGetNumericalConstant("0");
                 std::string comment = fmt::format("-{}", st->at($2)->getDescriptor());
-                e->generateCode("sub", zeroConst, $2, negResult, comment);
+                e->subFromZero($2, negResult);
                 $$ = negResult;
             }
             else { // '+'
@@ -361,8 +381,11 @@ simple_expression:
                     termIndex = convertToReal(termIndex);
                     trm = st->at(termIndex);
                 }
+                else if(exp->getVarType()==VarTypes::VT_REAL && trm->getVarType()==VarTypes::VT_REAL) {
+                    // all good 
+                }
                 else {   
-                    throw std::runtime_error(fmt::format("Unkown type conversion."));
+                    throw std::runtime_error(fmt::format("Unknown type conversion in {}{}{}", exp->getDescriptor(), operatorTokenToString($2), trm->getDescriptor()));
                 }
             }
             std::string tempDescriptor = fmt::format("{}{}{}", exp->getDescriptor(), operatorTokenToString($2), trm->getDescriptor());

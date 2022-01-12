@@ -19,6 +19,7 @@ public:
     void generateCodeConst(std::string operation, std::string constval, size_t s2i, std::string comment);
     void generateCodeConst(std::string operation, size_t s1i, std::string constval2, std::string constval3, std::string comment);
     void generateRaw(std::string raw);
+    void subFromZero(size_t s1, size_t s2);
     std::string getSymbolString(Symbol* s);
     void beginProgram();
     void endProgram();

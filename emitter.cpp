@@ -134,6 +134,18 @@ void Emitter::generateCodeConst(std::string operation, size_t s1i, std::string c
     this->outputFile << '\t' << out << " " << comment << "\n";
     fmt::print("{}\n", comment);
 }
+void Emitter::subFromZero(size_t s1i, size_t s2i) 
+{
+    SymbolTable* st = SymbolTable::getDefault();
+    char typeChar = st->at(s1i)->getVarType()==VarTypes::VT_INT?'i':'r';
+    std::string out = fmt::format(
+        "sub.{} #0, {}, {};", 
+        typeChar, 
+        this->getSymbolString(st->at(s1i)),
+        this->getSymbolString(st->at(s2i))
+    );
+    this->outputFile << '\t' << out << " " <<  "\n";
+}
 void Emitter::generateRaw(std::string raw)
 {
     this->outputFile << raw << " " <<  "\n";
