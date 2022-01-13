@@ -9,6 +9,7 @@ Emitter::Emitter(std::string filename) :
     {
         Emitter::instance = this;
     }
+    this->currentOutput = &this->outputFile;
 }
 Emitter* Emitter::getDefault()
 {
@@ -45,7 +46,7 @@ void Emitter::generateCode(std::string operation, size_t s1i,  size_t s2i, size_
         this->getSymbolString(st->at(s2i)),
         this->getSymbolString(st->at(s3i))
     );
-    this->outputFile << '\t' << out << " " << comment << "\n";
+    *this->currentOutput << '\t' << out << " " << comment << "\n";
     fmt::print("{}\n", comment);
 }
 void Emitter::generateCode(std::string operation, size_t s1i, size_t s2i, std::string comment)
@@ -59,7 +60,7 @@ void Emitter::generateCode(std::string operation, size_t s1i, size_t s2i, std::s
         this->getSymbolString(st->at(s1i)),
         this->getSymbolString(st->at(s2i))
     );
-    this->outputFile << '\t' << out << " " << comment << "\n";
+    *this->currentOutput << '\t' << out << " " << comment << "\n";
     fmt::print("{}\n", comment);
 }
 void Emitter::generateCode(std::string operation, size_t s1i, std::string comment)
@@ -72,7 +73,7 @@ void Emitter::generateCode(std::string operation, size_t s1i, std::string commen
         typeChar, 
         this->getSymbolString(st->at(s1i))
     );
-    this->outputFile << '\t' << out << " " << comment << "\n";
+    *this->currentOutput << '\t' << out << " " << comment << "\n";
     fmt::print("{}\n", comment);
 }
 void Emitter::generateCodeConst(std::string operation, size_t s1i, std::string constval, size_t s3i, std::string comment)
@@ -87,7 +88,7 @@ void Emitter::generateCodeConst(std::string operation, size_t s1i, std::string c
         constval,
         this->getSymbolString(st->at(s3i))
     );
-    this->outputFile << '\t' << out << " " << comment << "\n";
+    *this->currentOutput << '\t' << out << " " << comment << "\n";
     fmt::print("{}\n", comment);
 }
 void Emitter::generateCodeConst(std::string operation, size_t s1i, size_t s2i, std::string constval, std::string comment)
@@ -102,7 +103,7 @@ void Emitter::generateCodeConst(std::string operation, size_t s1i, size_t s2i, s
         this->getSymbolString(st->at(s2i)),
         constval
     );
-    this->outputFile << '\t' << out << " " << comment << "\n";
+    *this->currentOutput << '\t' << out << " " << comment << "\n";
     fmt::print("{}\n", comment);
 }
 void Emitter::generateCodeConst(std::string operation, std::string constval, size_t s2i, std::string comment)
@@ -116,7 +117,7 @@ void Emitter::generateCodeConst(std::string operation, std::string constval, siz
         constval,
         this->getSymbolString(st->at(s2i))
     );
-    this->outputFile << '\t' << out << " " << comment << "\n";
+    *this->currentOutput << '\t' << out << " " << comment << "\n";
     fmt::print("{}\n", comment);
 }
 void Emitter::generateCodeConst(std::string operation, size_t s1i, std::string constval2, std::string constval3, std::string comment)
@@ -131,7 +132,7 @@ void Emitter::generateCodeConst(std::string operation, size_t s1i, std::string c
         constval2,
         constval3
     );
-    this->outputFile << '\t' << out << " " << comment << "\n";
+    *this->currentOutput << '\t' << out << " " << comment << "\n";
     fmt::print("{}\n", comment);
 }
 void Emitter::subFromZero(size_t s1i, size_t s2i) 
@@ -144,21 +145,33 @@ void Emitter::subFromZero(size_t s1i, size_t s2i)
         this->getSymbolString(st->at(s1i)),
         this->getSymbolString(st->at(s2i))
     );
-    this->outputFile << '\t' << out << " " <<  "\n";
+    *this->currentOutput << '\t' << out << " " <<  "\n";
 }
 void Emitter::generateRaw(std::string raw)
 {
-    this->outputFile << raw << " " <<  "\n";
+    *this->currentOutput << raw << " " <<  "\n";
     fmt::print("{}\n", raw);
+}
+void Emitter::generateLabel(std::string lab)
+{
+    *this->currentOutput << lab << ":" <<  "\n";
+}
+void Emitter::generateJump(std::string to)
+{
+    *this->currentOutput << "\tjump.i #" << to <<  ";\n";
+}
+void Emitter::initialJump()
+{
+    SymbolTable *st = SymbolTable::getDefault();
+    st->clearIdentifierList(); // idlist is filled with input output
+    std::string label = fmt::format("lab{}",st->pushNextLabelIndex());
+    this->generateJump(label);
 }
 void Emitter::beginProgram()
 {
     fmt::print("Begin program\n");
     SymbolTable *st = SymbolTable::getDefault();
-    st->clearIdentifierList(); // idlist is filled with input output
-    std::string label = fmt::format("lab{}",st->getNextLabelIndex());
-    this->outputFile << fmt::format("\tjump.i #{};\n", label);
-    this->outputFile << fmt::format("{}:\n", label);
+    this->generateLabel(fmt::format("lab{}", st->popLabelIndex()));
 }
 void Emitter::endProgram()
 {
@@ -168,4 +181,13 @@ void Emitter::endProgram()
 void Emitter::setDefault()
 {
     Emitter::instance = this;
+}
+void Emitter::enterTempOutput()
+{
+    this->currentOutput = &this->outputTemp;
+}
+void Emitter::exitTempOutput(bool dumpToFile=true)
+{
+    this->outputFile << this->outputTemp.str();
+    this->currentOutput = &this->outputFile;
 }

@@ -17,6 +17,7 @@
     bool isResultReal(Symbol * s1, Symbol *s2);
     size_t convertToReal(size_t stIndex, SymbolTable* st=nullptr, Emitter * e=nullptr);
     size_t convertToInt(size_t stIndex, SymbolTable* st=nullptr, Emitter * e=nullptr);
+    VarTypes attributeToVarType(size_t attr);
 }
 %define api.token.prefix {TOK_}
 %define api.value.type {address_t}
@@ -54,9 +55,10 @@
 %%
 program:
     PROGRAM ID '(' identifier_list ')' ';'
-    { Emitter::getDefault()->beginProgram(); }
+    { Emitter::getDefault()->initialJump(); }
     declarations
     subprogram_declarations
+    { Emitter::getDefault()->beginProgram(); }
     compound_statement
     '.'
     { Emitter::getDefault()->endProgram(); }
@@ -69,20 +71,7 @@ identifier_list:
 
 declarations:
         declarations VAR identifier_list ':' type ';' {
-            VarTypes t;
-            switch($5)
-            {
-                case TOK_INTEGER:
-                    t = VarTypes::VT_INT;
-                break;
-                case TOK_REAL:
-                    t = VarTypes::VT_REAL;
-                break;
-                default:
-                    throw std::runtime_error(fmt::format("Bad type"));
-                break;
-            }
-            SymbolTable::getDefault()->setMemoryIdentifierList(t);
+            SymbolTable::getDefault()->setMemoryIdentifierList(attributeToVarType($5));
         }
     |   %empty
     ;
@@ -120,12 +109,23 @@ subprogram_declarations:
     ;
 
 subprogram_declaration:
-    subprogram_head declarations compound_statement
+        subprogram_head declarations compound_statement {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->exitLocalContext();
+            Emitter::getDefault()->exitTempOutput();
+        }
     ;
 
 subprogram_head:
-    FUNCTION ID arguments ':' standard_type ';'
-    | PROCEDURE ID arguments ';'
+        FUNCTION ID arguments ':' standard_type ';'
+    |   PROCEDURE ID  {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            std::string procLabel = st->at($2)->getAttribute();
+            e->generateLabel(procLabel);
+            st->enterLocalContext(false);
+            e->enterTempOutput();
+        } arguments ';'
     ;
 
 arguments:
@@ -134,8 +134,14 @@ arguments:
     ;
 
 parameter_list:
-    identifier_list ':' type
-    | parameter_list ';' identifier_list ':' type
+        identifier_list ':' type {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->idListToArguments();
+        }
+    |   parameter_list ';' identifier_list ':' type {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->idListToArguments();
+        }
     ;
 
 compound_statement:
@@ -200,13 +206,13 @@ statement:
             Emitter *e = Emitter::getDefault();
             std::string labelElse = fmt::format("lab{}_else", st->popLabelIndex());
             std::string labelAfter = fmt::format("lab{}_endif", st->pushNextLabelIndex());
-            e->generateRaw(fmt::format("\tjump.i #{};", labelAfter));
-            e->generateRaw(fmt::format("{}:", labelElse));
+            e->generateJump(labelAfter);
+            e->generateLabel(labelElse);
         } statement {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
             std::string labelAfter = fmt::format("lab{}_endif", st->popLabelIndex());
-            e->generateRaw(fmt::format("{}:", labelAfter));
+            e->generateLabel(labelAfter);
         }
     |   WHILE expression {
             SymbolTable *st = SymbolTable::getDefault();
@@ -219,15 +225,15 @@ statement:
                 expressionIndex = convertToInt(expressionIndex);
                 expression = st->at(expressionIndex);
             }
-            e->generateRaw(fmt::format("{}:", labelWhile));
+            e->generateLabel(labelWhile);
             e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelEndWhile), "");
         } DO statement {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
             std::string labelWhile = fmt::format("lab{}_while", st->popLabelIndex());
             std::string labelEndWhile = fmt::format("lab{}_endwhile", st->popLabelIndex());
-            e->generateRaw(fmt::format("\tjump.i #{};", labelWhile));
-            e->generateRaw(fmt::format("{}:", labelEndWhile));
+            e->generateJump(labelWhile);
+            e->generateLabel(labelEndWhile);
 
         }
     |   WRITE '(' expression ')' {
@@ -330,10 +336,10 @@ expression:
                 break;
             }
             e->generateCodeConst("mov", "#0", opResultIndex, "");
-            e->generateRaw(fmt::format("\tjump.i #{};", labelAfter));
-            e->generateRaw(fmt::format("{}:", labelTrue));
+            e->generateJump(labelAfter);
+            e->generateLabel(labelTrue);
             e->generateCodeConst("mov", "#1", opResultIndex, "");
-            e->generateRaw(fmt::format("{}:", labelAfter));
+            e->generateLabel(labelAfter);
             $$ = opResultIndex;
 
         }
@@ -546,4 +552,21 @@ size_t convertToInt(size_t stIndex, SymbolTable* st, Emitter * e)
     size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_INT, comment);
     e->generateCode("realtoint", stIndex, convertedIndex, comment);
     return convertedIndex;
+}
+VarTypes attributeToVarType(size_t attr)
+{
+    VarTypes t;
+    switch(attr)
+    {
+        case TOK_INTEGER:
+            t = VarTypes::VT_INT;
+        break;
+        case TOK_REAL:
+            t = VarTypes::VT_REAL;
+        break;
+        default:
+            throw std::runtime_error(fmt::format("Bad type"));
+        break;
+    }
+    return t;
 }
