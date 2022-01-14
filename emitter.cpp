@@ -186,8 +186,35 @@ void Emitter::enterTempOutput()
 {
     this->currentOutput = &this->outputTemp;
 }
-void Emitter::exitTempOutput(bool dumpToFile=true)
+void Emitter::exitTempOutput(size_t localStackSize, bool dumpToFile)
 {
+    this->generateEnterProcedure(localStackSize);
     this->outputFile << this->outputTemp.str();
     this->currentOutput = &this->outputFile;
+    this->generateProcedureReturn();
+}
+void Emitter::generateEnterProcedure(size_t size)
+{
+    this->outputFile << "\tenter.i #" << size << ";\n";
+}
+void Emitter::generateProcedureReturn()
+{
+    this->outputFile << "\tleave;\n";
+    this->outputFile << "\treturn;\n";
+}
+void Emitter::generateTwoCodeInt(std::string operation, std::string target)
+{
+    *this->currentOutput << "\t" << operation << ".i #" << target << ";\n";
+}
+size_t Emitter::pushIDListToStack()
+{
+    SymbolTable* st = SymbolTable::getDefault();
+    const std::vector<size_t> &idList = st->getIDList();
+    size_t stackSize = idList.size() * 4;
+    for(auto i:idList)
+    {
+        this->generateTwoCodeInt("push", fmt::format("{}", st->at(i)->getAddress()));
+    }
+    st->clearIdentifierList();
+    return stackSize;
 }

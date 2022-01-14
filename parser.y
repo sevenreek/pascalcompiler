@@ -29,7 +29,8 @@
 %token  VAR
 %token  ARRAY
 %token  OF
-%token  NUM
+%token  NUMINT
+%token  NUMREAL
 %token  INTEGER
 %token  REAL
 %token  FUNCTION
@@ -112,7 +113,7 @@ subprogram_declaration:
         subprogram_head declarations compound_statement {
             SymbolTable *st = SymbolTable::getDefault();
             st->exitLocalContext();
-            Emitter::getDefault()->exitTempOutput();
+            Emitter::getDefault()->exitTempOutput(st->getLocalStackSize());
         }
     ;
 
@@ -136,11 +137,11 @@ arguments:
 parameter_list:
         identifier_list ':' type {
             SymbolTable *st = SymbolTable::getDefault();
-            st->idListToArguments();
+            st->idListToArguments(attributeToVarType($3));
         }
     |   parameter_list ';' identifier_list ':' type {
             SymbolTable *st = SymbolTable::getDefault();
-            st->idListToArguments();
+            st->idListToArguments(attributeToVarType($5));
         }
     ;
 
@@ -276,12 +277,34 @@ variable:
 
 procedure_statement:
         ID
-    |   ID '(' expression_list ')'
+    |   ID '(' expression_list ')' {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            size_t stackSize = e->pushIDListToStack();
+            switch(st->at($1)->getFuncType()) {
+                case FunctionTypes::FP_NONE:
+                    throw std::runtime_error(fmt::format("{} is not a function or procedure.", st->at($1)->getDescriptor()));
+                break;
+                case FunctionTypes::FP_FUNC:
+                    throw std::runtime_error(fmt::format("Ingoring return value of function {}.", st->at($1)->getDescriptor()));
+                break;
+                case FunctionTypes::FP_PROC:
+                    e->generateTwoCodeInt("call", st->at($1)->getAttribute());
+                    e->generateTwoCodeInt("incsp", fmt::format("{}", stackSize));
+                break;
+            }
+        }
     ;
 
 expression_list:
-        expression {$$ = $1;}
-    |   expression_list ',' expression
+        expression {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->addToIdentifierListStack($1);
+        }
+    |   expression_list ',' expression {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->addToIdentifierListStack($3);
+        }
     ;
 
 expression:
@@ -472,6 +495,16 @@ mulop:
     |   DIV {$$ = TOK_DIV;} 
     |   MOD {$$ = TOK_MOD;}
     |   '%' {$$ = TOK_MOD;}
+    ;   
+
+numerical:
+        NUMREAL {
+            $$ = $1;
+        }
+    |   NUMINT {
+            
+            $$ = $1;
+        }
     ;   
 
 factor:
