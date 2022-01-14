@@ -10,7 +10,7 @@ integer     {digits}
 real        {digits}\.{digits}([Ee][\+\-]?{digits})?
 id          [a-zA-Z][a-zA-Z0-9]*
 whitespace  [ \t\r]+
-mathop      [\-\+\/\*\%]
+sign        [\-\+\/\*\%]
 
 %%
 {whitespace}    ;    // eat up whitespace
@@ -43,19 +43,20 @@ mathop      [\-\+\/\*\%]
                     std::string parsedText(yytext);
                     int idPosition = SymbolTable::getDefault()->insertOrGetSymbolIndex(parsedText);
                     yylval = idPosition;
+                    SymbolTable::getDefault()->at(idPosition)
                     return TOK_ID;
                 }
 {integer}       {
                     std::string parsedText(yytext);
                     int idPosition = SymbolTable::getDefault()->insertOrGetNumericalConstant(parsedText);
                     yylval = idPosition;
-                    return TOK_NUM;
+                    return TOK_NUMINT;
                 }
 {real}          {
                     std::string parsedText(yytext);
                     int idPosition = SymbolTable::getDefault()->insertOrGetNumericalConstant(parsedText);
                     yylval = idPosition;
-                    return TOK_NUM;
+                    return TOK_NUMREAL;
                 }
 \n              {} // yylineno
 .               return yytext[0];

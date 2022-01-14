@@ -33,100 +33,7 @@ int varTypeToSize(VarTypes t, size_t arraySize)
     if(arraySize) memorySize*=arraySize;
     return memorySize;
 }
-Symbol::Symbol(std::string attr, SymbolTypes type) : attribute(attr), symbolType(type) 
-{
 
-}
-Symbol::Symbol(std::string attr, SymbolTypes stype, VarTypes vtype): attribute(attr), symbolType(stype), varType(vtype)
-{
-
-}
-Symbol::Symbol(std::string attr, SymbolTypes stype, VarTypes vtype, address_t address): attribute(attr), symbolType(stype), varType(vtype), address(address)
-{
-
-}
-Symbol::~Symbol()
-{
-
-}
-void Symbol::setArrayBounds(std::tuple<size_t, size_t> bounds)
-{
-    this->arrayBounds = bounds;
-}
-bool Symbol::isInMemory()
-{
-    return (this->address != NO_ADDRESS) && (this->varType != VarTypes::VT_NOTYPE);
-}
-void Symbol::placeInMemory(VarTypes type, address_t address)
-{
-    this->varType = type;
-    this->address = address;
-}
-const std::string Symbol::getAttribute()
-{
-    return this->attribute;
-}
-address_t Symbol::getAddress()
-{
-    return this->address;
-}
-SymbolTypes Symbol::getSymbolType()
-{
-    return this->symbolType;
-}
-VarTypes Symbol::getVarType()
-{
-    return this->varType;
-}
-std::string Symbol::getDescriptor()
-{
-    if(this->descriptor.empty()){
-        return this->attribute;
-    }
-    else {
-        return this->descriptor;
-    }
-}
-void Symbol::setDescriptor(std::string desc)
-{
-    this->descriptor = desc;
-}
-bool Symbol::isArray()
-{
-    return (std::get<0>(this->arrayBounds) != 0) || (std::get<1>(this->arrayBounds) != 0);
-}
-void Symbol::setIsReference(bool ref)
-{
-    this->isReference = ref;
-}
-bool Symbol::getIsReference()
-{
-    return this->isReference;
-}
-void Symbol::setVarType(VarTypes vt)
-{
-    this->varType = vt;
-}
-std::tuple<size_t, size_t> Symbol::getArrayBounds()
-{
-    return this->arrayBounds;
-}
-FunctionTypes Symbol::getFuncType()
-{
-    return this->funcType;
-}
-void Symbol::setFuncType(FunctionTypes ft)
-{
-    this->funcType = ft;
-}
-void Symbol::setLocal(bool local)
-{
-    this->local = local;
-}
-bool Symbol::isLocal()
-{
-    return this->local;
-}
 
 SymbolTable* SymbolTable::instance = nullptr;
 SymbolTable::SymbolTable()
@@ -208,14 +115,6 @@ size_t SymbolTable::insertSymbolIndex(std::string s)
 size_t SymbolTable::insertOrGetNumericalConstant(std::string s)
 {
     size_t i = -1;
-    VarTypes type;
-    if (s.find(".") != std::string::npos) {
-        type = VarTypes::VT_REAL;
-    }
-    else {
-        type = VarTypes::VT_INT;
-    }
-
     if(this->tryGetSymbolIndex(s, i)) {
         return i;
         fmt::print("Returning numeric constant '{}' of type {} at {}\n", s, varTypeEnumToString(type), i);
@@ -341,8 +240,7 @@ void SymbolTable::idListToArguments(VarTypes type)
     else {
         fmt::print("Pushing id list to arguments with type {}:\n", varTypeEnumToString( type ));
     }
-    if(this->identifierListStack.size() == 0) return;
-    for(size_t i = this->identifierListStack.size()-1; i--; i>=0)
+    for(size_t i = this->identifierListStack.size()-1; i>=0; i--)
     {
         address_t addr = this->getNextArgumentAddress();
         size_t index = i;
@@ -352,6 +250,9 @@ void SymbolTable::idListToArguments(VarTypes type)
         this->at(index)->placeInMemory(type, addr);
         this->at(index)->setArrayBounds({aStart,aEnd});
         this->at(index)->setIsReference(true);
+        this->at(index)->setDescriptor(fmt::format("&{}", this->at(index)->getAttribute()));
+        fmt::print("\t{} ({}) @{}\n", this->at(index)->getDescriptor(), varTypeEnumToString(this->at(index)->getVarType() ), addr );
+        if(i == 0) break;
     }
     this->clearIdentifierList();
     
@@ -378,4 +279,7 @@ size_t SymbolTable::getLocalStackSize()
 {
    return abs(this->lastLocalAddress);
 }
-
+const std::vector<size_t> & SymbolTable::getIDList()
+{
+    return this->identifierListStack;
+}
