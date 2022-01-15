@@ -19,7 +19,7 @@ Emitter* Emitter::getDefault()
 std::string Emitter::getSymbolAddress(Symbol* s)
 {
     if(s->getAddress() == -1) {
-        throw std::runtime_error(fmt::format("Address of variable {} not set.", s->getDescriptor()));
+        throw ParsingException(fmt::format("Address of variable {} not set.", s->getDescriptor()));
     }
     if(s->isLocal())
         return fmt::format("BP{:+}",s->getAddress());
@@ -36,7 +36,7 @@ std::string Emitter::getSymbolString(Symbol* s)
     {
         if(!s->isInMemory()) 
         {
-            throw std::runtime_error(fmt::format("Undeclared variable {}.", s->getDescriptor()));
+            throw ParsingException(fmt::format("Undeclared variable {}.", s->getDescriptor()));
         }
         if(s->getIsReference()) {
             return fmt::format("*{}", this->getSymbolAddress(s));

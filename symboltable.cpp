@@ -27,10 +27,10 @@ int varTypeToSize(VarTypes t, size_t arraySize)
             memorySize = 8;
         break;
         case VarTypes::VT_NOTYPE:
-            throw std::runtime_error(fmt::format("Tried obtaining size of <notype>"));
+            throw ParsingException(fmt::format("Tried obtaining size of <notype>"));
         break;
         default:
-            throw std::runtime_error(fmt::format("Unknown VarType enum {}", t));
+            throw ParsingException(fmt::format("Unknown VarType enum {}", t));
         break;
     }
     if(arraySize) memorySize*=arraySize;
@@ -101,7 +101,7 @@ size_t SymbolTable::getSymbolIndex(std::string s)
         return i;
     }
     else {
-        throw std::runtime_error(fmt::format("Symbol {} is absent from the symbol table.", s));
+        throw ParsingException(fmt::format("Symbol {} is absent from the symbol table.", s));
         return i;
     }
 
@@ -219,7 +219,7 @@ address_t SymbolTable::getNextArgumentAddress()
 {
     if(!this->addressContext) // global context
     {
-        throw std::runtime_error("Tried getting next argument address in global context.");
+        throw ParsingException("Tried getting next argument address in global context.");
     }
     address_t retval = this->lastArgumentAddress;
     this->lastArgumentAddress += 4; // pointers are 4 bytes
@@ -232,9 +232,9 @@ size_t SymbolTable::contextualizeSymbol(size_t symbolIndex)
     if(newSymbol->isInMemory()) // variable was already placed in memory
     {
         if(newSymbol->isLocal() && this->getAddressContext()) { // trying to redeclare local?
-            throw std::runtime_error(fmt::format("Local variable {} already declared.", newSymbol->getAttribute()));
+            throw ParsingException(fmt::format("Local variable {} already declared.", newSymbol->getAttribute()));
         } else if(!newSymbol->isLocal() && !this->getAddressContext()) { // trying to declare global again
-            throw std::runtime_error(fmt::format("Global variable {} already declared.", newSymbol->getAttribute()));
+            throw ParsingException(fmt::format("Global variable {} already declared.", newSymbol->getAttribute()));
         } else if (!newSymbol->isLocal() && this->getAddressContext()) { // local scope shadowing global
             fmt::print("Variable {} shadowing global.\n", newSymbol->getAttribute());
             symbolIndex = this->insertSymbolIndex(newSymbol->getAttribute());
@@ -313,6 +313,10 @@ size_t SymbolTable::placeContextAsArguments(size_t functionIndex)
         }
         sym->placeInMemory(addr);
         sym->setIsReference(true);
+    }
+    for(size_t i = 0; i<this->contextualizedSymbolIndices.size(); i++) {
+        size_t symIndex = this->contextualizedSymbolIndices[i];
+        Symbol * sym = this->at(symIndex);
         this->at(functionIndex)->addFuncArg(sym->getVarType());
     }
     size_t size = this->contextualizedSymbolIndices.size();
@@ -323,7 +327,7 @@ size_t SymbolTable::placeContextAsArguments(size_t functionIndex)
 void SymbolTable::enterLocalContext(size_t funcIndex)
 {
     Symbol* f = this->at(funcIndex);
-    if(this->addressContext) throw std::runtime_error("Already in procedure/function body.");
+    if(this->addressContext) throw ParsingException("Already in procedure/function body.");
     if(f->getFuncType()==FunctionTypes::FP_FUNC) {
         this->addressContext = AddressContext::AC_FUNC;
         this->lastArgumentAddress = 12; // return value is BP+8
@@ -334,13 +338,13 @@ void SymbolTable::enterLocalContext(size_t funcIndex)
         this->lastArgumentAddress = 8;
     }
     else {
-        throw std::runtime_error(fmt::format("Tried entering local context with symbol {}", f->getDescriptor()));
+        throw ParsingException(fmt::format("Tried entering local context with symbol {}", f->getDescriptor()));
     }
     this->lastLocalAddress = 0;
 }
 void SymbolTable::exitLocalContext()
 {
-    if(!this->addressContext) throw std::runtime_error("Already in global context.");
+    if(!this->addressContext) throw ParsingException("Already in global context.");
     this->addressContext = AddressContext::AC_GLOBAL;
     this->activeFunctionContext = -1;
     this->deleteLocals();

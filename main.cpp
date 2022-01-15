@@ -6,7 +6,7 @@
 
 void yyerror(std::string s)
 {
-  throw std::runtime_error(s);
+  throw ParsingException(s);
 }
 int main(int argc, char* argv[])
 {
@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
         yy_switch_to_buffer(bufState);
       }
       yyparse();
-    } catch (const std::runtime_error& e) {
+    } catch (const ParsingException& e) {
       fmt::print("error at line {}: {}\n", yylineno, e.what());
     }
     yylex_destroy();

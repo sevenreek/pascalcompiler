@@ -1,7 +1,7 @@
 all: comp
 
-comp: lexer.o parser.o symbol.o symboltable.o emitter.o main.cpp
-	g++ -std=c++2a -Wall -g symbol.o symboltable.o lexer.o parser.o emitter.o main.cpp -lfmt  -o comp 
+comp: lexer.o parser.o parsingexception.o symbol.o symboltable.o emitter.o main.cpp
+	g++ -std=c++2a -Wall -g parsingexception.o symbol.o symboltable.o lexer.o parser.o emitter.o main.cpp -lfmt  -o comp 
 
 lexer.o : lexer.cpp parser.hpp
 	g++ -std=c++2a -Wall -g -c lexer.cpp -o lexer.o -lfmt
@@ -24,6 +24,8 @@ parser.cpp parser.hpp: parser.y
 lexer.cpp lexer.hpp: lexer.l 
 	flex -o lexer.cpp --header=lexer.hpp lexer.l 
 
+parsingexception.o : parsingexception.cpp parsingexception.hpp
+	g++ -std=c++2a -Wall -g -c parsingexception.cpp -o parsingexception.o -lfmt
 
 .PHONY: clean test
 

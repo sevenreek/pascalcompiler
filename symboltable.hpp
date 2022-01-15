@@ -3,7 +3,6 @@
 #include <string>
 #include <stack>
 #include "symbol.hpp"
-#include "parsingexception.hpp"
 std::string varTypeEnumToString(VarTypes t);
 std::string addressContextEnumToString(AddressContext ac);
 int varTypeToSize(VarTypes t, size_t arraySize=0);

@@ -107,7 +107,7 @@ void Symbol::addFuncArg(VarTypes vt)
 VarTypes Symbol::getArgType(size_t index)
 {
     if(index >= this->funcArgs.size()) {
-        throw std::runtime_error(fmt::format("Too many arguments to call to {}.", this->getDescriptor()));
+        throw ParsingException(fmt::format("Too many arguments to call to {}.", this->getDescriptor()));
     }
     return this->funcArgs.at(index);
 }

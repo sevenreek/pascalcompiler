@@ -1,4 +1,5 @@
 #pragma once
+#include "parsingexception.hpp"
 #include <climits>
 #include <string>
 #include <tuple>

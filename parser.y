@@ -2,6 +2,7 @@
 
 %code requires {
     #include "symboltable.hpp"
+    #include "parsingexception.hpp"
     #include "emitter.hpp"
     #include <exception>
     #include <string>
@@ -97,12 +98,12 @@ type:
             Symbol* startSym = st->at($3);
             Symbol* endSym = st->at($6);
             if(startSym->getVarType() != VarTypes::VT_INT || endSym->getVarType() != VarTypes::VT_INT) {
-                throw std::runtime_error(fmt::format("Expected integer type in array type bounds."));
+                throw ParsingException(fmt::format("Expected integer type in array type bounds."));
             }
             size_t start = std::stoi(startSym->getAttribute());
             size_t end = std::stoi(endSym->getAttribute());
             if(start > end) {
-                throw std::runtime_error(fmt::format("Expected increasing array bounds."));
+                throw ParsingException(fmt::format("Expected increasing array bounds."));
             }
             st->setCurrentArraySize({start, end});
             $$ = $9;
@@ -170,7 +171,7 @@ parameter_list:
         }
     |   parameter_list ';' identifier_list ':' type  {
             SymbolTable *st = SymbolTable::getDefault();
-            st->setNewContextVarType(static_cast<VarTypes>($3));
+            st->setNewContextVarType(static_cast<VarTypes>($5));
         }
     ;
 
@@ -199,14 +200,14 @@ statement:
             Symbol* var = st->at(varIndex);
             Symbol* expr = st->at(exprIndex);
             if(var->getFuncType()==FunctionTypes::FP_FUNC && st->getActiveFunction() != varIndex) {
-                throw std::runtime_error(
+                throw ParsingException(
                     fmt::format("Cannot assign to function {} outside of its scope.", 
                         var->getDescriptor()
                     )
                 );
             }
             else if(var->getFuncType()==FunctionTypes::FP_PROC) {
-                throw std::runtime_error(
+                throw ParsingException(
                     fmt::format("Cannot assign to procedure {}.", 
                         var->getDescriptor()
                     )
@@ -223,7 +224,7 @@ statement:
                 // no conversion needed
             }
             else {
-                throw std::runtime_error(
+                throw ParsingException(
                     fmt::format("Types not set properly in assignment {}:={}", 
                         var->getDescriptor(),  expr->getDescriptor()
                     )
@@ -315,10 +316,10 @@ variable:
             Symbol* expression = st->at(expressionIndex);
             Symbol* array = st->at(arrayIndex);
             if(!array->isArray()) {
-                throw std::runtime_error(fmt::format("{} is not an array.", array->getDescriptor()));
+                throw ParsingException(fmt::format("{} is not an array.", array->getDescriptor()));
             }
             if(expression->getVarType() != VarTypes::VT_INT) { // convert to int maybe?
-                throw std::runtime_error(fmt::format("Array index must be integer."));
+                throw ParsingException(fmt::format("Array index must be integer."));
             }
             std::string comment = fmt::format("{}[{}]", array->getDescriptor(), expression->getDescriptor());
             size_t arrayIndexTemp = st->getNewTemporaryVariable(VarTypes::VT_INT, comment); 
@@ -342,7 +343,7 @@ procedure_statement:
             Emitter *e = Emitter::getDefault();
             switch(st->at($1)->getFuncType()) {
                 case FunctionTypes::FP_NONE:
-                    throw std::runtime_error(fmt::format("{} is not a function or procedure.", st->at($1)->getDescriptor()));
+                    throw ParsingException(fmt::format("{} is not a function or procedure.", st->at($1)->getDescriptor()));
                 break;
                 case FunctionTypes::FP_FUNC:
                     fmt::print("Ignoring return value of function {}.", st->at($1)->getDescriptor());
@@ -357,7 +358,7 @@ procedure_statement:
             Symbol * func = st->at($1);
             switch(func->getFuncType()) {
                 case FunctionTypes::FP_NONE:
-                    throw std::runtime_error(fmt::format("{} is not a function or procedure.", func->getDescriptor()));
+                    throw ParsingException(fmt::format("{} is not a function or procedure.", func->getDescriptor()));
                 break;
                 case FunctionTypes::FP_FUNC:
                     fmt::print("Ignoring return value of function {}.", func->getDescriptor());
@@ -417,7 +418,7 @@ expression:
                     // all good 
                 }
                 else {   
-                    throw std::runtime_error(fmt::format("Unknown type conversion in {}{}{}", e1->getDescriptor(), operatorTokenToString($2), e2->getDescriptor()));
+                    throw ParsingException(fmt::format("Unknown type conversion in {}{}{}", e1->getDescriptor(), operatorTokenToString($2), e2->getDescriptor()));
                 }
             }
             std::string tempDescriptor = fmt::format("{}{}{}", e1->getDescriptor(), operatorTokenToString($2), e2->getDescriptor());
@@ -501,7 +502,7 @@ simple_expression:
                     // all good 
                 }
                 else {   
-                    throw std::runtime_error(fmt::format("Unknown type conversion in {}{}{}", exp->getDescriptor(), operatorTokenToString($2), trm->getDescriptor()));
+                    throw ParsingException(fmt::format("Unknown type conversion in {}{}{}", exp->getDescriptor(), operatorTokenToString($2), trm->getDescriptor()));
                 }
             }
             std::string tempDescriptor = fmt::format("{}{}{}", exp->getDescriptor(), operatorTokenToString($2), trm->getDescriptor());
@@ -517,7 +518,7 @@ simple_expression:
                     e->generateCode("or",  expressionIndex, termIndex, opResult, tempDescriptor);
                 break;
                 default:
-                    throw std::runtime_error(fmt::format("Unknown expression operator {}.", $2));
+                    throw ParsingException(fmt::format("Unknown expression operator {}.", $2));
                 break;
             }
             $$ = opResult;
@@ -570,7 +571,7 @@ term:
                     e->generateCode("and", termIndex, factorIndex, opResult, tempDescriptor);
                 break;
                 default:
-                    throw std::runtime_error(fmt::format("Unknown muloperator {}.", $2));
+                    throw ParsingException(fmt::format("Unknown muloperator {}.", $2));
                 break;
             }
             $$ = opResult;
@@ -594,10 +595,10 @@ factor:
             Emitter *e = Emitter::getDefault();
             Symbol * func = st->at($1);
             if(st->at($1)->getFuncType() != FunctionTypes::FP_FUNC) {
-                throw std::runtime_error(fmt::format("{} is not a function.", st->at($1)->getDescriptor()));
+                throw ParsingException(fmt::format("{} is not a function.", st->at($1)->getDescriptor()));
             }
             if(static_cast<long>(func->getArgCount()) != $3) {
-                throw std::runtime_error(
+                throw ParsingException(
                     fmt::format(
                         "Excepted {} arguments in function call to {}, got {}.", 
                         func->getArgCount(), func->getDescriptor(), $3
@@ -675,7 +676,7 @@ size_t convertToType(size_t stIndex, VarTypes target, SymbolTable* st, Emitter *
     std::string targetVarTypeString = varTypeEnumToString(target);
     std::string comment = fmt::format("{}({})", targetVarTypeString, toConvert->getDescriptor());
     if(source != VarTypes::VT_INT && source != VarTypes::VT_REAL) {
-        throw std::runtime_error(fmt::format("Tried to convert errortyped {}.", toConvert->getAttribute()));
+        throw ParsingException(fmt::format("Tried to convert errortyped {}.", toConvert->getAttribute()));
     } 
     else if (source == VarTypes::VT_INT && target == VarTypes::VT_REAL) { // int to real
         convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, comment);
@@ -710,7 +711,7 @@ VarTypes attributeToVarType(size_t attr)
             t = VarTypes::VT_REAL;
         break;
         default:
-            throw std::runtime_error(fmt::format("Bad type"));
+            throw ParsingException(fmt::format("Bad type"));
         break;
     }
     return t;
@@ -718,6 +719,6 @@ VarTypes attributeToVarType(size_t attr)
 void throwIfUndeclared(Symbol * s)
 {
     if(!s->isInMemory() && !s->getFuncType()) {
-        throw std::runtime_error(fmt::format("Undeclraed variable {}",s->getDescriptor()));
+        throw ParsingException(fmt::format("Undeclraed variable {}",s->getDescriptor()));
     }
 }
