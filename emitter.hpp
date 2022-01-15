@@ -26,6 +26,8 @@ public:
     void generateProcedureReturn();
     void subFromZero(size_t s1, size_t s2);
     std::string getSymbolString(Symbol* s);
+    std::string getSymbolAddress(Symbol* s);
+    std::string getSymbolReferenceString(size_t symbolIndex);
     void initialJump();
     void beginProgram();
     void endProgram();
@@ -35,6 +37,7 @@ public:
     void generateJump(std::string toLabel);
     void enterTempOutput();
     void exitTempOutput(size_t localStackSize, bool dumpToFile=true);
-    size_t pushIDListToStack();
+    void pushSymbolToStack(size_t symbol);
 };
+
 

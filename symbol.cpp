@@ -23,9 +23,8 @@ bool Symbol::isInMemory()
 {
     return (this->address != NO_ADDRESS) && (this->varType != VarTypes::VT_NOTYPE);
 }
-void Symbol::placeInMemory(VarTypes type, address_t address)
+void Symbol::placeInMemory(address_t address)
 {
-    this->varType = type;
     this->address = address;
 }
 const std::string Symbol::getAttribute()
@@ -92,4 +91,27 @@ void Symbol::setLocal(bool local)
 bool Symbol::isLocal()
 {
     return this->local;
+}
+void Symbol::setFuncArgs(std::vector<VarTypes> args) 
+{
+    this->funcArgs = args;
+}
+std::vector<VarTypes> &Symbol::getFuncArgs() 
+{
+    return this->funcArgs;
+}
+void Symbol::addFuncArg(VarTypes vt)
+{
+    this->funcArgs.push_back(vt);
+}
+VarTypes Symbol::getArgType(size_t index)
+{
+    if(index >= this->funcArgs.size()) {
+        throw std::runtime_error(fmt::format("Too many arguments to call to {}.", this->getDescriptor()));
+    }
+    return this->funcArgs.at(index);
+}
+size_t Symbol::getArgCount() 
+{
+    return this->funcArgs.size();    
 }

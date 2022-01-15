@@ -19,8 +19,8 @@ sign        [\-\+\/\*\%]
 "array"         return TOK_ARRAY;
 "of"            return TOK_OF;
 "write"         return TOK_WRITE;
-"integer"       return TOK_INTEGER;
-"real"          return TOK_REAL;
+"integer"       {yylval = VarTypes::VT_INT; return TOK_INTEGER;}
+"real"          {yylval = VarTypes::VT_REAL; return TOK_REAL;}
 "function"      return TOK_FUNCTION;
 "procedure"     return TOK_PROCEDURE;
 "begin"         return TOK_BEGIN;
@@ -40,23 +40,24 @@ sign        [\-\+\/\*\%]
 "div"           return TOK_DIV;
 "mod"           return TOK_MOD;
 {id}            {
-                    std::string parsedText(yytext);
+                    std::string parsedText{yytext};
                     int idPosition = SymbolTable::getDefault()->insertOrGetSymbolIndex(parsedText);
                     yylval = idPosition;
-                    SymbolTable::getDefault()->at(idPosition)
                     return TOK_ID;
                 }
 {integer}       {
-                    std::string parsedText(yytext);
+                    std::string parsedText{yytext};
                     int idPosition = SymbolTable::getDefault()->insertOrGetNumericalConstant(parsedText);
+                    SymbolTable::getDefault()->at(idPosition)->setVarType(VarTypes::VT_INT);
                     yylval = idPosition;
-                    return TOK_NUMINT;
+                    return TOK_NUM;
                 }
 {real}          {
-                    std::string parsedText(yytext);
+                    std::string parsedText{yytext};
                     int idPosition = SymbolTable::getDefault()->insertOrGetNumericalConstant(parsedText);
+                    SymbolTable::getDefault()->at(idPosition)->setVarType(VarTypes::VT_REAL);
                     yylval = idPosition;
-                    return TOK_NUMREAL;
+                    return TOK_NUM;
                 }
 \n              {} // yylineno
 .               return yytext[0];

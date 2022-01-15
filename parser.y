@@ -17,6 +17,7 @@
     bool isResultReal(Symbol * s1, Symbol *s2);
     size_t convertToReal(size_t stIndex, SymbolTable* st=nullptr, Emitter * e=nullptr);
     size_t convertToInt(size_t stIndex, SymbolTable* st=nullptr, Emitter * e=nullptr);
+    size_t convertToType(size_t stIndex, VarTypes vt, SymbolTable* st=nullptr, Emitter * e=nullptr);
     VarTypes attributeToVarType(size_t attr);
 }
 %define api.token.prefix {TOK_}
@@ -29,8 +30,7 @@
 %token  VAR
 %token  ARRAY
 %token  OF
-%token  NUMINT
-%token  NUMREAL
+%token  NUM
 %token  INTEGER
 %token  REAL
 %token  FUNCTION
@@ -66,13 +66,30 @@ program:
     ; 
 
 identifier_list:
-    ID {SymbolTable::getDefault()->addToIdentifierListStack($1);}
-    | identifier_list ',' ID {SymbolTable::getDefault()->addToIdentifierListStack($3);}
+        ID
+    |   identifier_list ',' ID
+    ;
+
+typed_identifier_list:
+    ID typed_identifier_list_right {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->contextualizeSymbol($1, static_cast<VarTypes>($2));
+            $$ = $2;
+        }
+    ;
+
+typed_identifier_list_right:
+        ',' ID typed_identifier_list_right {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->contextualizeSymbol($2, static_cast<VarTypes>($3));
+            $$ = $3;
+        }
+    |   ':' type { $$ = $2; }
     ;
 
 declarations:
-        declarations VAR identifier_list ':' type ';' {
-            SymbolTable::getDefault()->setMemoryIdentifierList(attributeToVarType($5));
+        declarations VAR typed_identifier_list ';' {
+            SymbolTable::getDefault()->placeContextInMemory();
         }
     |   %empty
     ;
@@ -100,8 +117,8 @@ type:
     ;
 
 standard_type:
-        INTEGER {$$ = TOK_INTEGER;}
-    |   REAL    {$$ = TOK_REAL;}
+        INTEGER {$$ = $1;}
+    |   REAL    {$$ = $1;}
     ;
 
 subprogram_declarations:
@@ -118,30 +135,47 @@ subprogram_declaration:
     ;
 
 subprogram_head:
-        FUNCTION ID arguments ':' standard_type ';'
+        FUNCTION ID  {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            Symbol * func = st->at($2);
+            func->setFuncType(FunctionTypes::FP_FUNC);
+            std::string funcLabel = func->getAttribute();
+            e->generateLabel(funcLabel);
+            st->enterLocalContext($2);
+            e->enterTempOutput();
+        } arguments ':' standard_type ';' {
+            SymbolTable *st = SymbolTable::getDefault();
+            Symbol * func = st->at($2);
+            func->setVarType(static_cast<VarTypes>($6));
+        }
     |   PROCEDURE ID  {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string procLabel = st->at($2)->getAttribute();
+            Symbol * proc = st->at($2);
+            proc->setFuncType(FunctionTypes::FP_PROC);
+            std::string procLabel = proc->getAttribute();
+
             e->generateLabel(procLabel);
-            st->enterLocalContext(false);
+            st->enterLocalContext($2);
             e->enterTempOutput();
         } arguments ';'
     ;
 
 arguments:
-    '(' parameter_list ')'
+    '(' parameter_list ')' {
+            SymbolTable *st = SymbolTable::getDefault();
+            $$ = st->placeContextAsArguments($-2);
+        }
     | %empty
     ;
 
 parameter_list:
-        identifier_list ':' type {
-            SymbolTable *st = SymbolTable::getDefault();
-            st->idListToArguments(attributeToVarType($3));
+        typed_identifier_list  {
+            $$ = $-2;
         }
-    |   parameter_list ';' identifier_list ':' type {
-            SymbolTable *st = SymbolTable::getDefault();
-            st->idListToArguments(attributeToVarType($5));
+    |   parameter_list ';' typed_identifier_list  {
+            $$ = $-2;
         }
     ;
 
@@ -169,6 +203,20 @@ statement:
             size_t exprIndex = $3;
             Symbol* var = st->at(varIndex);
             Symbol* expr = st->at(exprIndex);
+            if(var->getFuncType()==FunctionTypes::FP_FUNC && st->getActiveFunction() != varIndex) {
+                throw std::runtime_error(
+                    fmt::format("Cannot assign to function {} outside of its scope.", 
+                        var->getDescriptor()
+                    )
+                );
+            }
+            else if(var->getFuncType()==FunctionTypes::FP_PROC) {
+                throw std::runtime_error(
+                    fmt::format("Cannot assign to procedure {}.", 
+                        var->getDescriptor()
+                    )
+                );
+            }
             if(var->getVarType()==VarTypes::VT_INT && expr->getVarType()==VarTypes::VT_REAL) {
                 exprIndex = convertToInt(exprIndex);
                 expr = st->at(exprIndex);
@@ -276,34 +324,56 @@ variable:
     ;
 
 procedure_statement:
-        ID
-    |   ID '(' expression_list ')' {
+        ID  {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            size_t stackSize = e->pushIDListToStack();
             switch(st->at($1)->getFuncType()) {
                 case FunctionTypes::FP_NONE:
                     throw std::runtime_error(fmt::format("{} is not a function or procedure.", st->at($1)->getDescriptor()));
                 break;
                 case FunctionTypes::FP_FUNC:
-                    throw std::runtime_error(fmt::format("Ingoring return value of function {}.", st->at($1)->getDescriptor()));
-                break;
+                    fmt::print("Ignoring return value of function {}.", st->at($1)->getDescriptor());
                 case FunctionTypes::FP_PROC:
                     e->generateTwoCodeInt("call", st->at($1)->getAttribute());
-                    e->generateTwoCodeInt("incsp", fmt::format("{}", stackSize));
+                break;
+            }   
+        }
+    |   ID {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->pushToCallStack($1);
+        } '(' expression_list ')' {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            Symbol * func = st->at($1);
+            switch(func->getFuncType()) {
+                case FunctionTypes::FP_NONE:
+                    throw std::runtime_error(fmt::format("{} is not a function or procedure.", func->getDescriptor()));
+                break;
+                case FunctionTypes::FP_FUNC:
+                    fmt::print("Ignoring return value of function {}.", func->getDescriptor());
+                case FunctionTypes::FP_PROC:
+                    e->generateTwoCodeInt("call", func->getAttribute());
+                    e->generateTwoCodeInt("incsp", fmt::format("{}", $4*4));
                 break;
             }
+            st->popFromCallStack();
         }
     ;
 
 expression_list:
         expression {
+            Emitter *e = Emitter::getDefault();
             SymbolTable *st = SymbolTable::getDefault();
-            st->addToIdentifierListStack($1);
+            e->pushSymbolToStack($1);
+            $$ = 1;
+            fmt::print("Argument {} at {}\n", st->at($1)->getDescriptor(), 0);
         }
-    |   expression_list ',' expression {
+    |     expression_list ',' expression {
+            Emitter *e = Emitter::getDefault();
             SymbolTable *st = SymbolTable::getDefault();
-            st->addToIdentifierListStack($3);
+            e->pushSymbolToStack($3);
+            $$ = $1 + 1;
+            fmt::print("Argument {} at {}\n", st->at($3)->getDescriptor(), $1);
         }
     ;
 
@@ -429,11 +499,8 @@ simple_expression:
                 case TOK_OR:
                     e->generateCode("or",  expressionIndex, termIndex, opResult, tempDescriptor);
                 break;
-                case TOK_AND:
-                    e->generateCode("and", expressionIndex, termIndex, opResult, tempDescriptor);
-                break;
                 default:
-                    throw std::runtime_error(fmt::format("Unknown operation {}.", $2));
+                    throw std::runtime_error(fmt::format("Unknown expression operator {}.", $2));
                 break;
             }
             $$ = opResult;
@@ -443,7 +510,6 @@ simple_expression:
 exprop:
         sign {$$ = $1;}
     |   OR   {$$ = TOK_OR;}
-    |   AND  {$$ = TOK_AND;}
     ;
 
 sign:
@@ -483,6 +549,12 @@ term:
                 case TOK_MOD: case '%':
                     e->generateCode("mod", termIndex, factorIndex, opResult, tempDescriptor);
                 break;
+                case TOK_AND:
+                    e->generateCode("and", termIndex, factorIndex, opResult, tempDescriptor);
+                break;
+                default:
+                    throw std::runtime_error(fmt::format("Unknown muloperator {}.", $2));
+                break;
             }
             $$ = opResult;
         }
@@ -495,21 +567,32 @@ mulop:
     |   DIV {$$ = TOK_DIV;} 
     |   MOD {$$ = TOK_MOD;}
     |   '%' {$$ = TOK_MOD;}
-    ;   
-
-numerical:
-        NUMREAL {
-            $$ = $1;
-        }
-    |   NUMINT {
-            
-            $$ = $1;
-        }
+    |   AND  {$$ = TOK_AND;}
     ;   
 
 factor:
         variable {$$ = $1;}
-    |   ID '(' expression_list ')'
+    |   ID '(' expression_list ')' {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            Symbol * func = st->at($1);
+            if(st->at($1)->getFuncType() != FunctionTypes::FP_FUNC) {
+                throw std::runtime_error(fmt::format("{} is not a function.", st->at($1)->getDescriptor()));
+            }
+            if(static_cast<long>(func->getArgCount()) != $3) {
+                throw std::runtime_error(
+                    fmt::format(
+                        "Excepted {} arguments in function call to {}, got {}.", 
+                        func->getArgCount(), func->getDescriptor(), $3
+                    )   
+                );
+            }
+            size_t returnValue = st->getNewTemporaryVariable(func->getVarType(), fmt::format("{}()", func->getDescriptor()));
+            e->pushSymbolToStack(returnValue);
+            e->generateTwoCodeInt("call", st->at($1)->getAttribute());
+            e->generateTwoCodeInt("incsp", fmt::format("{}", $3*4+4)); // add 4 for the return value
+            $$ = returnValue;
+        }
     |   NUM {$$ = $1;}
     |   '(' expression ')' {
             $$ = $2;
@@ -564,27 +647,39 @@ std::string operatorTokenToString(address_t token)
         default: return "<UNNKOWNOPSTRING>";
     }
 }
-size_t convertToReal(size_t stIndex, SymbolTable* st, Emitter * e)
+
+size_t convertToType(size_t stIndex, VarTypes target, SymbolTable* st, Emitter * e)
 {
     if(!e) e = Emitter::getDefault();
     if(!st) st = SymbolTable::getDefault();
     Symbol * toConvert = st->at(stIndex);
-    std::string comment = fmt::format("real({})", toConvert->getDescriptor());
-    if(toConvert->getVarType() != VarTypes::VT_INT) throw std::runtime_error(fmt::format("Tried to convert nonint {} to real.", toConvert->getAttribute()));
-    size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, comment);
-    e->generateCode("inttoreal", stIndex, convertedIndex, comment);
+    size_t convertedIndex = stIndex;
+    VarTypes source = toConvert->getVarType();
+    std::string targetVarTypeString = varTypeEnumToString(target);
+    std::string comment = fmt::format("{}({})", targetVarTypeString, toConvert->getDescriptor());
+    if(source != VarTypes::VT_INT && source != VarTypes::VT_REAL) {
+        throw std::runtime_error(fmt::format("Tried to convert errortyped {}.", toConvert->getAttribute()));
+    } 
+    else if (source == VarTypes::VT_INT && target == VarTypes::VT_REAL) { // int to real
+        convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_REAL, comment);
+        e->generateCode("inttoreal", stIndex, convertedIndex, comment);
+    } 
+    else if (source == VarTypes::VT_REAL && target == VarTypes::VT_INT) { // real to int
+        convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_INT, comment);
+        e->generateCode("realtoint", stIndex, convertedIndex, comment);
+    } 
+    else if (source == target) { // no convert
+        // all good
+    }
     return convertedIndex;
+}
+size_t convertToReal(size_t stIndex, SymbolTable* st, Emitter * e)
+{
+    return convertToType(stIndex, VarTypes::VT_REAL, st, e);
 }
 size_t convertToInt(size_t stIndex, SymbolTable* st, Emitter * e)
 {
-    if(!e) e = Emitter::getDefault();
-    if(!st) st = SymbolTable::getDefault();
-    Symbol * toConvert = st->at(stIndex);
-    std::string comment = fmt::format("int({})", toConvert->getDescriptor());
-    if(toConvert->getVarType() != VarTypes::VT_REAL) throw std::runtime_error(fmt::format("Tried to convert nonreal {} to int.", toConvert->getAttribute()));
-    size_t convertedIndex = st->getNewTemporaryVariable(VarTypes::VT_INT, comment);
-    e->generateCode("realtoint", stIndex, convertedIndex, comment);
-    return convertedIndex;
+    return convertToType(stIndex, VarTypes::VT_INT, st, e);
 }
 VarTypes attributeToVarType(size_t attr)
 {

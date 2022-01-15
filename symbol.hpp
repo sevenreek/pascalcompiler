@@ -2,6 +2,8 @@
 #include <climits>
 #include <string>
 #include <tuple>
+#include <fmt/format.h>
+#include <vector>
 #define address_t long
 const address_t NO_ADDRESS = LONG_MAX;
 enum VarTypes {
@@ -35,6 +37,7 @@ private:
     address_t address = NO_ADDRESS;
     bool isReference = false;
     bool local = false;
+    std::vector<VarTypes> funcArgs;
 public:
     Symbol(std::string attr, SymbolTypes type);
     Symbol(std::string attr, SymbolTypes type, VarTypes vtype);
@@ -45,7 +48,7 @@ public:
     SymbolTypes getSymbolType();
     VarTypes getVarType();
     void setVarType(VarTypes vt);
-    void placeInMemory(VarTypes type, address_t address);
+    void placeInMemory(address_t address);
     bool isInMemory();
     std::string getDescriptor();
     void setDescriptor(std::string desc);
@@ -58,4 +61,9 @@ public:
     void setFuncType(FunctionTypes ft);
     void setLocal(bool local);
     bool isLocal();
+    void setFuncArgs(std::vector<VarTypes> args);
+    void addFuncArg(VarTypes vt);
+    std::vector<VarTypes> &getFuncArgs();
+    VarTypes getArgType(size_t index);
+    size_t getArgCount();
 };

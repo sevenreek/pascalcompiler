@@ -15,17 +15,32 @@ Emitter* Emitter::getDefault()
 {
     return Emitter::instance;
 }
+
+std::string Emitter::getSymbolAddress(Symbol* s)
+{
+    if(s->isLocal())
+        return fmt::format("BP{:+}",s->getAddress());
+    else 
+        return fmt::format("{}", s->getAddress());
+}
 std::string Emitter::getSymbolString(Symbol* s)
 {
+    if(s->getFuncType()==FunctionTypes::FP_FUNC)
+    {
+        return fmt::format("*BP+8");
+    }
     if(s->getSymbolType()==SymbolTypes::ST_ID)
     {
+        if(!s->isInMemory()) 
+        {
+            throw std::runtime_error(fmt::format("Undeclared variable {}.", s->getDescriptor()));
+        }
         if(s->getIsReference()) {
-            return fmt::format("*{}", s->getAddress());
+            return fmt::format("*{}", this->getSymbolAddress(s));
         }
         else {
-            return fmt::format("{}", s->getAddress());
-        }
-        
+            return fmt::format("{}", this->getSymbolAddress(s));
+        }   
     }
     else if(s->getSymbolType()==SymbolTypes::ST_NUM)
     {
@@ -33,7 +48,24 @@ std::string Emitter::getSymbolString(Symbol* s)
     }
     return "<ERROR>";
 }
-
+std::string Emitter::getSymbolReferenceString(size_t symbolIndex)
+{
+    SymbolTable* st = SymbolTable::getDefault();
+    Symbol *s = st->at(symbolIndex);
+    if(s->getIsReference()) {
+        return fmt::format("{}", this->getSymbolAddress(s));
+    } 
+    else if (s->getSymbolType() == SymbolTypes::ST_NUM) {
+        size_t tempIndex = st->getNewTemporaryVariable(s->getVarType(), fmt::format("store({})", s->getDescriptor()));
+        Symbol *temp = st->at(tempIndex);
+        this->generateCode("mov", symbolIndex, tempIndex, fmt::format("{}", temp->getDescriptor()));
+        return fmt::format("#{}", temp->getAddress());
+    }
+    else {
+        return fmt::format("#{}", this->getSymbolAddress(s));
+    }
+    return "<ERROR>";
+}
 void Emitter::generateCode(std::string operation, size_t s1i,  size_t s2i, size_t s3i, std::string comment)
 {
     SymbolTable* st = SymbolTable::getDefault();
@@ -163,7 +195,6 @@ void Emitter::generateJump(std::string to)
 void Emitter::initialJump()
 {
     SymbolTable *st = SymbolTable::getDefault();
-    st->clearIdentifierList(); // idlist is filled with input output
     std::string label = fmt::format("lab{}",st->pushNextLabelIndex());
     this->generateJump(label);
 }
@@ -206,15 +237,9 @@ void Emitter::generateTwoCodeInt(std::string operation, std::string target)
 {
     *this->currentOutput << "\t" << operation << ".i #" << target << ";\n";
 }
-size_t Emitter::pushIDListToStack()
+void Emitter::pushSymbolToStack(size_t symbolIndex)
 {
-    SymbolTable* st = SymbolTable::getDefault();
-    const std::vector<size_t> &idList = st->getIDList();
-    size_t stackSize = idList.size() * 4;
-    for(auto i:idList)
-    {
-        this->generateTwoCodeInt("push", fmt::format("{}", st->at(i)->getAddress()));
-    }
-    st->clearIdentifierList();
-    return stackSize;
+    SymbolTable *st = SymbolTable::getDefault();
+    std::string ref = this->getSymbolReferenceString(symbolIndex);
+    *this->currentOutput << "\t" << "push.i " << ref << "; " << fmt::format("push {}", st->at(symbolIndex)->getDescriptor()) <<"\n";
 }

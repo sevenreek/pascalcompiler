@@ -8,16 +8,25 @@ void yyerror(std::string s)
 {
   throw std::runtime_error(s);
 }
-int main()
+int main(int argc, char* argv[])
 {
     SymbolTable st;
     st.setDefault();
-    Emitter e("myoutput.asm");
+    std::string outfile{"myoutput.asm"};
+    if(argc > 2) outfile = argv[2];
+    Emitter e(outfile);
     e.setDefault();
-    try {
+    FILE * infilePointer = nullptr;
+    
+      if(argc > 1) {
+        infilePointer = fopen(argv[1], "r");
+        auto bufState = yy_create_buffer(infilePointer, YY_BUF_SIZE);
+        yy_switch_to_buffer(bufState);
+      }
       yyparse();
+    try {
     } catch (const std::runtime_error& e) {
-      fmt::print("error @{}: {}\n", yylineno, e.what());
+      fmt::print("error at line {}: {}\n", yylineno, e.what());
     }
     yylex_destroy();
     exit(0);

@@ -26,14 +26,27 @@ int varTypeToSize(VarTypes t, size_t arraySize)
         case VarTypes::VT_REAL:
             memorySize = 8;
         break;
+        case VarTypes::VT_NOTYPE:
+            throw std::runtime_error(fmt::format("Tried obtaining size of <notype>"));
+        break;
         default:
-            throw std::runtime_error(fmt::format("Unkown VarType enum {}", t));
+            throw std::runtime_error(fmt::format("Unknown VarType enum {}", t));
         break;
     }
     if(arraySize) memorySize*=arraySize;
     return memorySize;
 }
 
+std::string addressContextEnumToString(AddressContext ac) 
+{
+    switch(ac)
+    {
+        case AddressContext::AC_GLOBAL: return "global";
+        case AddressContext::AC_FUNC: return "function";
+        case AddressContext::AC_PROC: return "procedure";
+    }
+    return "<error-context>";
+}
 
 SymbolTable* SymbolTable::instance = nullptr;
 SymbolTable::SymbolTable()
@@ -101,15 +114,29 @@ size_t SymbolTable::insertOrGetSymbolIndex(std::string s)
         fmt::print("Returning symbol '{}' at {}\n", s, i);
     }
     else {
-        fmt::print("Pushing symbol '{}' at {}\n", s, this->symbols.size());
-        this->symbols.push_back(Symbol(s, SymbolTypes::ST_ID));
+        fmt::print(
+            "Adding {} symbol '{}' at {}\n", 
+            addressContextEnumToString(this->addressContext), 
+            s, 
+            this->symbols.size()
+        );
+        Symbol sym{s, SymbolTypes::ST_ID};
+        sym.setLocal(this->addressContext);
+        this->symbols.push_back(sym);
         return this->symbols.size()-1;
     }
 }
 size_t SymbolTable::insertSymbolIndex(std::string s)
 {
-    fmt::print("Force pushing symbol '{}' at {}\n", s, this->symbols.size());
-    this->symbols.push_back(Symbol(s, SymbolTypes::ST_ID));
+    fmt::print(
+        "Adding {} symbol '{}' at {}\n", 
+        addressContextEnumToString(this->addressContext), 
+        s, 
+        this->symbols.size()
+    );
+    Symbol sym{s, SymbolTypes::ST_ID};
+    sym.setLocal(this->addressContext);
+    this->symbols.push_back(sym);
     return this->symbols.size()-1;
 }
 size_t SymbolTable::insertOrGetNumericalConstant(std::string s)
@@ -117,11 +144,11 @@ size_t SymbolTable::insertOrGetNumericalConstant(std::string s)
     size_t i = -1;
     if(this->tryGetSymbolIndex(s, i)) {
         return i;
-        fmt::print("Returning numeric constant '{}' of type {} at {}\n", s, varTypeEnumToString(type), i);
+        fmt::print("Returning numeric constant '{}' at {}\n", s, i);
     }
     else {
-        fmt::print("Pushing numeric constant '{}' of type {} at {}\n", s, varTypeEnumToString(type), this->symbols.size());
-        this->symbols.push_back(Symbol(s, SymbolTypes::ST_NUM, type));
+        fmt::print("Pushing numeric constant '{}' at {}\n",  s, this->symbols.size());
+        this->symbols.push_back(Symbol(s, SymbolTypes::ST_NUM));
         return this->symbols.size()-1;
     }
 }
@@ -150,58 +177,26 @@ size_t SymbolTable::getNewTemporaryVariable(VarTypes type, std::string descripto
 {
     std::string name = fmt::format("$t{}", this->getNextGlobalTemporaryAndIncrement());
     address_t addr = this->getNextAddressAndIncrement(type);
-    this->symbols.push_back(Symbol(name, SymbolTypes::ST_ID, type, addr));
+    Symbol sym{name, SymbolTypes::ST_ID, type, addr};
+    sym.setLocal(this->addressContext);
+    this->symbols.push_back(sym);
     Symbol *ts = this->at(this->symbols.size()-1);
+    if(descriptor.empty()) descriptor = name;
     ts->setDescriptor(descriptor);
-    fmt::print("Created new temporary {}({}) of type {} at {} @{}\n", name, ts->getDescriptor(), varTypeEnumToString(type), this->symbols.size()-1, addr);
+    fmt::print(
+        "Created new {} temporary {}({}) of type {} at {} @{}\n", 
+        addressContextEnumToString(this->addressContext), 
+        name, 
+        ts->getDescriptor(), 
+        varTypeEnumToString(type), 
+        this->symbols.size()-1, 
+        addr
+    );
     return this->symbols.size()-1;
 }
 Symbol* SymbolTable::at(size_t index)
 {
     return &this->symbols.at(index);
-}
-void SymbolTable::addToIdentifierListStack(size_t ind)
-{
-    fmt::print("Added '{}'({}) to id list.\n", this->at(ind)->getAttribute(), ind);
-    this->identifierListStack.push_back(ind);
-}
-void SymbolTable::clearIdentifierList()
-{
-    fmt::print("Cleared id list.\n");
-    this->identifierListStack.clear();
-}
-
-void SymbolTable::setMemoryIdentifierList(VarTypes type, bool empty)
-{
-    size_t aStart = std::get<0>(this->arrayBounds);
-    size_t aEnd = std::get<1>(this->arrayBounds);
-    if(this->isTypeArray()) {
-        fmt::print(
-            "Pushing id list to memory with type {}[{}..{}]:\n", 
-            varTypeEnumToString( type ), aStart, aEnd);
-    }
-    else {
-        fmt::print("Pushing id list to memory with type {}:\n", varTypeEnumToString( type ));
-    }
-    for(auto i:this->identifierListStack)
-    {
-        if(this->isTypeArray()) {
-            address_t addr = this->getNextAddressAndIncrement(type, aEnd-aStart+1); // maybe remove +1???
-            fmt::print("\t'{}'({}) @{}\n", this->at(i)->getAttribute(), i, addr);
-            this->at(i)->placeInMemory(type, addr);
-            this->at(i)->setArrayBounds({aStart,aEnd});
-        }
-        else {
-            address_t addr = this->getNextAddressAndIncrement(type); 
-            fmt::print("\t'{}'({}) @{}\n", this->at(i)->getAttribute(), i, addr);
-            this->at(i)->placeInMemory(type, addr);
-        }
-        
-    }
-    if(empty)
-    {
-        this->clearIdentifierList();
-    }
 }
 
 
@@ -228,45 +223,97 @@ address_t SymbolTable::getNextArgumentAddress()
     this->lastArgumentAddress += 4; // pointers are 4 bytes
     return retval;
 }
-void SymbolTable::idListToArguments(VarTypes type)
+void SymbolTable::contextualizeSymbol(size_t symbolIndex, VarTypes vartype)
 {
-    size_t aStart = std::get<0>(this->arrayBounds);
-    size_t aEnd = std::get<1>(this->arrayBounds);
-    if(this->isTypeArray()) {
-        fmt::print(
-            "Pushing id list to arguments with type {}[{}..{}]:\n", 
-            varTypeEnumToString( type ), aStart, aEnd);
-    }
-    else {
-        fmt::print("Pushing id list to arguments with type {}:\n", varTypeEnumToString( type ));
-    }
-    for(size_t i = this->identifierListStack.size()-1; i>=0; i--)
+    Symbol* newSymbol = this->at(symbolIndex);
+    fmt::print("\tContextualizing symbol {}.\n", newSymbol->getAttribute());
+    if(newSymbol->isInMemory()) // variable was already placed in memory
     {
-        address_t addr = this->getNextArgumentAddress();
-        size_t index = i;
-        if(this->at(index)->isInMemory()) { // shadowing global or you don goofed
-            index = this->insertSymbolIndex(this->at(i)->getAttribute());
+        if(newSymbol->isLocal() && this->getAddressContext()) { // trying to redeclare local?
+            throw std::runtime_error(fmt::format("Local variable {} already declared.", newSymbol->getAttribute()));
+        } else if(!newSymbol->isLocal() && !this->getAddressContext()) { // trying to declare global again
+            throw std::runtime_error(fmt::format("Global variable {} already declared.", newSymbol->getAttribute()));
+        } else if (!newSymbol->isLocal() && this->getAddressContext()) { // local scope shadowing global
+            fmt::print("Variable {} shadowing global.\n", newSymbol->getAttribute());
+            symbolIndex = this->insertSymbolIndex(newSymbol->getAttribute());
+            newSymbol = this->at(symbolIndex);
+            newSymbol->setLocal(true);
         }
-        this->at(index)->placeInMemory(type, addr);
-        this->at(index)->setArrayBounds({aStart,aEnd});
-        this->at(index)->setIsReference(true);
-        this->at(index)->setDescriptor(fmt::format("&{}", this->at(index)->getAttribute()));
-        fmt::print("\t{} ({}) @{}\n", this->at(index)->getDescriptor(), varTypeEnumToString(this->at(index)->getVarType() ), addr );
-        if(i == 0) break;
     }
-    this->clearIdentifierList();
-    
+    newSymbol->setVarType(vartype);
+    this->contextualizedSymbolIndices.push_back(symbolIndex);
 }
-void SymbolTable::enterLocalContext(bool hasReturnValue)
+void SymbolTable::placeContextInMemory()
 {
+
+    for(size_t i = this->contextualizedSymbolIndices.size(); i-->0; ) {
+        size_t symIndex = this->contextualizedSymbolIndices[i];
+        Symbol * sym = this->at(symIndex);
+        size_t as = std::get<0>(this->arrayBounds);
+        size_t ae = std::get<1>(this->arrayBounds);
+        size_t arraySize = ((as==0)&&(ae==0))?0:((ae-as)?(ae-as):1); // 0 if end and start are 0; 1 if they are both same value; end-start if they are different
+        address_t addr = this->getNextAddressAndIncrement(sym->getVarType(), arraySize);
+        if(arraySize) {
+            fmt::print("\tPlacing array '{}[{}..{}]' in memory @ {}.\n",
+                sym->getDescriptor(),
+                as, ae,
+                addr
+            );
+        } else {
+            fmt::print("\tPlacing symbol '{}' in memory @ {}.\n",
+                sym->getDescriptor(),
+                addr
+            );
+        }
+        sym->placeInMemory(addr);
+    }
+    this->contextualizedSymbolIndices.clear();
+}
+size_t SymbolTable::placeContextAsArguments(size_t functionIndex)
+{
+    for(size_t i = this->contextualizedSymbolIndices.size(); i-->0; ) {
+        size_t symIndex = this->contextualizedSymbolIndices[i];
+        Symbol * sym = this->at(symIndex);
+        size_t as = std::get<0>(this->arrayBounds);
+        size_t ae = std::get<1>(this->arrayBounds);
+        size_t arraySize = ((as==0)&&(ae==0))?0:((ae-as)?(ae-as):1); // 0 if end and start are 0; 1 if they are both same value; end-start if they are different
+        address_t addr = this->getNextArgumentAddress();
+        if(arraySize) {
+            fmt::print("\tPlacing array '{}[{}..{}]' as argument @ {}.\n",
+                sym->getDescriptor(),
+                as, ae,
+                addr
+            );
+        } else {
+            fmt::print("\tPlacing symbol '{}' as argument @ {}.\n",
+                sym->getDescriptor(),
+                addr
+            );
+        }
+        sym->placeInMemory(addr);
+        sym->setIsReference(true);
+        this->at(functionIndex)->addFuncArg(sym->getVarType());
+    }
+    size_t size = this->contextualizedSymbolIndices.size();
+    this->contextualizedSymbolIndices.clear();
+
+    return size;
+}
+void SymbolTable::enterLocalContext(size_t funcIndex)
+{
+    Symbol* f = this->at(funcIndex);
     if(this->addressContext) throw std::runtime_error("Already in procedure/function body.");
-    if(hasReturnValue) {
+    if(f->getFuncType()==FunctionTypes::FP_FUNC) {
         this->addressContext = AddressContext::AC_FUNC;
         this->lastArgumentAddress = 12; // return value is BP+8
+        this->activeFunctionContext = funcIndex;
     }
-    else {
+    else if(f->getFuncType()==FunctionTypes::FP_PROC){
         this->addressContext = AddressContext::AC_PROC;
         this->lastArgumentAddress = 8;
+    }
+    else {
+        throw std::runtime_error(fmt::format("Tried entering local context with symbol {}", f->getDescriptor()));
     }
     this->lastLocalAddress = 0;
 }
@@ -274,12 +321,29 @@ void SymbolTable::exitLocalContext()
 {
     if(!this->addressContext) throw std::runtime_error("Already in global context.");
     this->addressContext = AddressContext::AC_GLOBAL;
+    this->activeFunctionContext = -1;
 }
 size_t SymbolTable::getLocalStackSize()
 {
    return abs(this->lastLocalAddress);
 }
-const std::vector<size_t> & SymbolTable::getIDList()
+
+AddressContext SymbolTable::getAddressContext() 
 {
-    return this->identifierListStack;
+    return this->addressContext;
+}
+size_t SymbolTable::getActiveFunction()
+{
+    return this->activeFunctionContext;
+}
+
+void SymbolTable::pushToCallStack(size_t func)
+{
+    this->functionCallStack.push(func);
+}
+size_t SymbolTable::popFromCallStack()
+{
+    size_t ret = this->functionCallStack.top();
+    this->functionCallStack.pop();
+    return ret;
 }
