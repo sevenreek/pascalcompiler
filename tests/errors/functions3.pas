@@ -9,6 +9,5 @@ begin
 end;
 
 begin
-    constAdd:=10;
-    ivar:=func(ivar, 1.0)
+    ivar:=func()
 end.

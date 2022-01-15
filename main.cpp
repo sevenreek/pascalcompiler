@@ -26,8 +26,9 @@ int main(int argc, char* argv[])
       }
       yyparse();
     } catch (const ParsingException& e) {
-      fmt::print("error at line {}: {}\n", yylineno, e.what());
+      fmt::print("\033[0;31m[error] at line {}: {}\033[0m\n", yylineno, e.what());
     }
+    fmt::print("\033[32mCompiled successfully!\033[0m\n");
     yylex_destroy();
     exit(0);
 }
