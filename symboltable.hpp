@@ -3,7 +3,7 @@
 #include <string>
 #include <stack>
 #include "symbol.hpp"
-
+#include "parsingexception.hpp"
 std::string varTypeEnumToString(VarTypes t);
 std::string addressContextEnumToString(AddressContext ac);
 int varTypeToSize(VarTypes t, size_t arraySize=0);
@@ -24,7 +24,7 @@ private:
     std::stack<size_t> functionCallStack;
     std::vector<size_t> contextualizedSymbolIndices;
     AddressContext addressContext = AddressContext::AC_GLOBAL;
-    size_t localVectorStartPos;
+    size_t unsetContextTypePosition = 0;
     size_t activeFunctionContext = -1;
 public:
     SymbolTable();
@@ -38,8 +38,8 @@ public:
     size_t insertSymbolIndex(std::string s);
     size_t getNewTemporaryVariable(VarTypes type, std::string descriptor="");
     Symbol* at(size_t index);
-    void contextualizeSymbol(size_t symbolIndex, VarTypes vartype);
-    void placeContextInMemory();
+    size_t contextualizeSymbol(size_t symbolIndex);
+    void placeContextInMemory(VarTypes vartype);
     size_t getNextLabelIndex();
     size_t pushNextLabelIndex();
     size_t popLabelIndex();
@@ -50,8 +50,11 @@ public:
     void exitLocalContext();
     size_t getLocalStackSize();
     AddressContext getAddressContext();
+    void setNewContextVarType(VarTypes vartype);
     size_t placeContextAsArguments(size_t functionIndex);
     size_t getActiveFunction();
     void pushToCallStack(size_t func);
     size_t popFromCallStack();
+    void dumpContext();
+    void deleteLocals();
 };

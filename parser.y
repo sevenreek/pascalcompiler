@@ -19,6 +19,7 @@
     size_t convertToInt(size_t stIndex, SymbolTable* st=nullptr, Emitter * e=nullptr);
     size_t convertToType(size_t stIndex, VarTypes vt, SymbolTable* st=nullptr, Emitter * e=nullptr);
     VarTypes attributeToVarType(size_t attr);
+    void throwIfUndeclared(Symbol * s);
 }
 %define api.token.prefix {TOK_}
 %define api.value.type {address_t}
@@ -52,11 +53,15 @@
 %token  DIV
 %token  MOD
 %token  WRITE
+%token  READ
 
 %%
 program:
     PROGRAM ID '(' identifier_list ')' ';'
-    { Emitter::getDefault()->initialJump(); }
+    { 
+        SymbolTable::getDefault()->dumpContext();
+        Emitter::getDefault()->initialJump(); 
+    }
     declarations
     subprogram_declarations
     { Emitter::getDefault()->beginProgram(); }
@@ -66,30 +71,18 @@ program:
     ; 
 
 identifier_list:
-        ID
-    |   identifier_list ',' ID
-    ;
-
-typed_identifier_list:
-    ID typed_identifier_list_right {
-            SymbolTable *st = SymbolTable::getDefault();
-            st->contextualizeSymbol($1, static_cast<VarTypes>($2));
-            $$ = $2;
+        ID {
+            $$ = SymbolTable::getDefault()->contextualizeSymbol($1);
+        }
+    |   identifier_list ',' ID {
+            $$ = SymbolTable::getDefault()->contextualizeSymbol($3);
         }
     ;
 
-typed_identifier_list_right:
-        ',' ID typed_identifier_list_right {
-            SymbolTable *st = SymbolTable::getDefault();
-            st->contextualizeSymbol($2, static_cast<VarTypes>($3));
-            $$ = $3;
-        }
-    |   ':' type { $$ = $2; }
-    ;
 
 declarations:
-        declarations VAR typed_identifier_list ';' {
-            SymbolTable::getDefault()->placeContextInMemory();
+        declarations VAR identifier_list ':' type ';' {
+            SymbolTable::getDefault()->placeContextInMemory(static_cast<VarTypes>($5));
         }
     |   %empty
     ;
@@ -165,17 +158,19 @@ subprogram_head:
 arguments:
     '(' parameter_list ')' {
             SymbolTable *st = SymbolTable::getDefault();
-            $$ = st->placeContextAsArguments($-2);
+            $$ = st->placeContextAsArguments($-1);
         }
     | %empty
     ;
 
 parameter_list:
-        typed_identifier_list  {
-            $$ = $-2;
+        identifier_list ':' type {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->setNewContextVarType(static_cast<VarTypes>($3));
         }
-    |   parameter_list ';' typed_identifier_list  {
-            $$ = $-2;
+    |   parameter_list ';' identifier_list ':' type  {
+            SymbolTable *st = SymbolTable::getDefault();
+            st->setNewContextVarType(static_cast<VarTypes>($3));
         }
     ;
 
@@ -230,7 +225,7 @@ statement:
             else {
                 throw std::runtime_error(
                     fmt::format("Types not set properly in assignment {}:={}", 
-                        varTypeEnumToString(var->getVarType()),  varTypeEnumToString(expr->getVarType())
+                        var->getDescriptor(),  expr->getDescriptor()
                     )
                 );
             }
@@ -285,18 +280,36 @@ statement:
             e->generateLabel(labelEndWhile);
 
         }
-    |   WRITE '(' expression ')' {
+    |   write_statement
+    ;
+
+write_statement:
+    WRITE '(' write_arguments ')' 
+    ;
+    
+write_arguments:
+    expression {
+            Emitter *e = Emitter::getDefault();
             SymbolTable *st = SymbolTable::getDefault();
-            std::string comment = fmt::format("write({})", st->at($3)->getDescriptor());
-            Emitter::getDefault()->generateCode("write", $3, comment); 
+            e->generateCode("write", $1, fmt::format("write({})", st->at($1)->getDescriptor()));
+        }
+    |     write_arguments ',' expression {
+            Emitter *e = Emitter::getDefault();
+            SymbolTable *st = SymbolTable::getDefault();
+            e->generateCode("write", $3, fmt::format("write({})", st->at($3)->getDescriptor()));
         }
     ;
 
+
 variable:
-        ID {$$ = $1;}
+        ID {$$ = $1; 
+            SymbolTable *st = SymbolTable::getDefault();
+            throwIfUndeclared(st->at($1));
+        }
     |   ID '[' expression ']' {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
+            throwIfUndeclared(st->at($1));
             size_t expressionIndex = $3;
             size_t arrayIndex = $1;
             Symbol* expression = st->at(expressionIndex);
@@ -338,10 +351,7 @@ procedure_statement:
                 break;
             }   
         }
-    |   ID {
-            SymbolTable *st = SymbolTable::getDefault();
-            st->pushToCallStack($1);
-        } '(' expression_list ')' {
+    |   ID '(' expression_list ')' {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
             Symbol * func = st->at($1);
@@ -356,7 +366,6 @@ procedure_statement:
                     e->generateTwoCodeInt("incsp", fmt::format("{}", $4*4));
                 break;
             }
-            st->popFromCallStack();
         }
     ;
 
@@ -364,16 +373,24 @@ expression_list:
         expression {
             Emitter *e = Emitter::getDefault();
             SymbolTable *st = SymbolTable::getDefault();
-            e->pushSymbolToStack($1);
+            size_t expressionIndex = $1;
+            size_t argumentIndex = 0;
+            VarTypes argType = st->at($-1)->getArgType(argumentIndex);
+            expressionIndex = convertToType(expressionIndex, argType);
+            e->pushSymbolToStack(expressionIndex);
             $$ = 1;
-            fmt::print("Argument {} at {}\n", st->at($1)->getDescriptor(), 0);
+            //fmt::print("Argument {} at {}\n", st->at($1)->getDescriptor(), 0);
         }
     |     expression_list ',' expression {
             Emitter *e = Emitter::getDefault();
             SymbolTable *st = SymbolTable::getDefault();
-            e->pushSymbolToStack($3);
+            size_t expressionIndex = $3;
+            size_t argumentIndex = $1;
+            VarTypes argType = st->at($-1)->getArgType(argumentIndex);
+            expressionIndex = convertToType(expressionIndex, argType);
+            e->pushSymbolToStack(expressionIndex);
             $$ = $1 + 1;
-            fmt::print("Argument {} at {}\n", st->at($3)->getDescriptor(), $1);
+            //fmt::print("Argument {} at {}\n", st->at($3)->getDescriptor(), $1);
         }
     ;
 
@@ -697,4 +714,10 @@ VarTypes attributeToVarType(size_t attr)
         break;
     }
     return t;
+}
+void throwIfUndeclared(Symbol * s)
+{
+    if(!s->isInMemory() && !s->getFuncType()) {
+        throw std::runtime_error(fmt::format("Undeclraed variable {}",s->getDescriptor()));
+    }
 }

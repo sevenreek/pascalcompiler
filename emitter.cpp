@@ -18,6 +18,9 @@ Emitter* Emitter::getDefault()
 
 std::string Emitter::getSymbolAddress(Symbol* s)
 {
+    if(s->getAddress() == -1) {
+        throw std::runtime_error(fmt::format("Address of variable {} not set.", s->getDescriptor()));
+    }
     if(s->isLocal())
         return fmt::format("BP{:+}",s->getAddress());
     else 

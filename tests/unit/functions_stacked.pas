@@ -7,5 +7,5 @@ begin
 end;
 
 begin
-    func(func(2.0))
+    ivar := func(func(2.0))
 end.

@@ -19,6 +19,7 @@ sign        [\-\+\/\*\%]
 "array"         return TOK_ARRAY;
 "of"            return TOK_OF;
 "write"         return TOK_WRITE;
+"read"          return TOK_READ;
 "integer"       {yylval = VarTypes::VT_INT; return TOK_INTEGER;}
 "real"          {yylval = VarTypes::VT_REAL; return TOK_REAL;}
 "function"      return TOK_FUNCTION;

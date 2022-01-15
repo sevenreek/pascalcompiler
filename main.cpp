@@ -18,13 +18,13 @@ int main(int argc, char* argv[])
     e.setDefault();
     FILE * infilePointer = nullptr;
     
+    try {
       if(argc > 1) {
         infilePointer = fopen(argv[1], "r");
         auto bufState = yy_create_buffer(infilePointer, YY_BUF_SIZE);
         yy_switch_to_buffer(bufState);
       }
       yyparse();
-    try {
     } catch (const std::runtime_error& e) {
       fmt::print("error at line {}: {}\n", yylineno, e.what());
     }

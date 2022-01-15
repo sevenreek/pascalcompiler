@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/comp",
-            "args": ["${workspaceFolder}/tests/unit/functions_recursive.pas"],
+            "args": ["${workspaceFolder}/tests/unit/functions_shadowing.pas"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "externalConsole": false,
