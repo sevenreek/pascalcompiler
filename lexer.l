@@ -10,16 +10,15 @@ integer     {digits}
 real        {digits}\.{digits}([Ee][\+\-]?{digits})?
 id          [a-zA-Z][a-zA-Z0-9]*
 whitespace  [ \t\r]+
-sign        [\-\+\/\*\%]
-
+sc_sign     [\-\+]
+sc_relops   [><=]
+sc_mulops   [\*\/]
 %%
 {whitespace}    ;    // eat up whitespace
 "program"       return TOK_PROGRAM;
 "var"           return TOK_VAR;
 "array"         return TOK_ARRAY;
 "of"            return TOK_OF;
-"write"         return TOK_WRITE;
-"read"          return TOK_READ;
 "integer"       {yylval = VarTypes::VT_INT; return TOK_INTEGER;}
 "real"          {yylval = VarTypes::VT_REAL; return TOK_REAL;}
 "function"      return TOK_FUNCTION;
@@ -33,13 +32,23 @@ sign        [\-\+\/\*\%]
 "while"         return TOK_WHILE;
 "do"            return TOK_DO;
 "not"           return TOK_NOT;
-"or"            return TOK_OR;
-"and"           return TOK_AND;
-"<="            return TOK_LE;
-">="            return TOK_GE;
-"<>"            return TOK_NEQ;
-"div"           return TOK_DIV;
-"mod"           return TOK_MOD;
+
+
+"write"          {yylval=TOK_WRITE; return TOK_WRITE;}
+"read"           {yylval=TOK_READ; return TOK_READ;}
+
+{sc_mulops}     {yylval=yytext[0]; return yylval;}
+"and"           {yylval=TOK_AND; return TOK_AND;}
+"div"           {yylval=TOK_DIV; return TOK_DIV;}
+"mod"           {yylval=TOK_MOD; return TOK_MOD;}
+
+"<="            {yylval=TOK_LE; return TOK_LE;}
+">="            {yylval=TOK_GE; return TOK_GE;}
+"<>"            {yylval=TOK_NEQ; return TOK_NEQ;}
+{sc_relops}     {yylval=yytext[0]; return yylval;}
+{sc_sign}       {yylval=yytext[0]; return yylval;}
+"or"            {yylval=TOK_OR; return TOK_OR;}
+
 {id}            {
                     std::string parsedText{yytext};
                     int idPosition = SymbolTable::getDefault()->insertOrGetSymbolIndex(parsedText);

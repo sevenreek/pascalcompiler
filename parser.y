@@ -21,6 +21,7 @@
     size_t convertToType(size_t stIndex, VarTypes vt, SymbolTable* st=nullptr, Emitter * e=nullptr);
     VarTypes attributeToVarType(size_t attr);
     void throwIfUndeclared(Symbol * s);
+    std::string ioOperationToString(size_t ioop);
 }
 %define api.token.prefix {TOK_}
 %define api.value.type {address_t}
@@ -239,7 +240,6 @@ statement:
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
             size_t expressionIndex = $2;
-            Symbol * expression = st->at(expressionIndex); // get temporary (or variable) behind expression
             /*
             if(expression->getVarType()==VarTypes::VT_REAL) {
                 expressionIndex = convertToInt(expressionIndex); // need logical value so convert to int
@@ -272,7 +272,6 @@ statement:
             Emitter *e = Emitter::getDefault();
             std::string labelEndWhile = fmt::format("lab{}_endwhile", st->peekLabelIndex()); // push enwhile label to the stack
             size_t expressionIndex = $3;
-            Symbol * expression = st->at(expressionIndex);
             /*
             if(expression->getVarType()==VarTypes::VT_REAL) {
                 expressionIndex = convertToInt(expressionIndex); // need logical value of expression so convert to int if necessary
@@ -289,23 +288,30 @@ statement:
             e->generateLabel(labelEndWhile); // write label for endwhile
 
         }
-    |   write_statement
+    |   io_statement
     ;
 
-write_statement:
-    WRITE '(' write_arguments ')' 
+io_statement:
+    io_operation '(' io_arguments ')' 
     ;
-    
-write_arguments:
+
+io_operation:
+        WRITE
+    |   READ
+    ;
+
+io_arguments:
     expression {
             Emitter *e = Emitter::getDefault();
             SymbolTable *st = SymbolTable::getDefault();
-            e->generateCode("write", $1, fmt::format("write({})", st->at($1)->getDescriptor()));
+            std::string ioOperation = ioOperationToString($-1);
+            e->generateCode(ioOperation, $1, fmt::format("{}({})", ioOperation, st->at($1)->getDescriptor()));
         }
-    |     write_arguments ',' expression {
+    |     io_arguments ',' expression {
             Emitter *e = Emitter::getDefault();
             SymbolTable *st = SymbolTable::getDefault();
-            e->generateCode("write", $3, fmt::format("write({})", st->at($3)->getDescriptor()));
+            std::string ioOperation = ioOperationToString($-1);
+            e->generateCode(ioOperation, $1, fmt::format("{}({})", ioOperation, st->at($1)->getDescriptor()));
         }
     ;
 
@@ -465,12 +471,12 @@ expression:
     ;
 
 relop:
-        '>'     {$$ = '>';}
-    |   '<'     {$$ = '<';}
-    |   LE      {$$ = TOK_LE;}
-    |   GE      {$$ = TOK_GE;}
-    |   NEQ     {$$ = TOK_NEQ;}
-    |   '='     {$$ = '=';}
+        '>'     
+    |   '<'     
+    |   LE      
+    |   GE      
+    |   NEQ     
+    |   '='     
     ;
 
 simple_expression:
@@ -534,13 +540,13 @@ simple_expression:
     ;
 
 exprop:
-        sign {$$ = $1;}
-    |   OR   {$$ = TOK_OR;}
+        sign 
+    |   OR   
     ;
 
 sign:
-        '+' {$$ = '+';}
-    |   '-' {$$ = '-';}
+        '+' 
+    |   '-' 
     ;   
 
 term:
@@ -588,12 +594,11 @@ term:
     ;
 
 mulop:
-        '*' {$$ = '*';}
-    |   '/' {$$ = '/';}
-    |   DIV {$$ = TOK_DIV;} 
-    |   MOD {$$ = TOK_MOD;}
-    |   '%' {$$ = TOK_MOD;}
-    |   AND  {$$ = TOK_AND;}
+        '*' 
+    |   '/' 
+    |   DIV 
+    |   MOD 
+    |   AND 
     ;   
 
 factor:
@@ -729,4 +734,13 @@ void throwIfUndeclared(Symbol * s)
     if(!s->isInMemory() && !s->getFuncType()) {
         throw ParsingException(fmt::format("Undeclraed variable {}",s->getDescriptor()));
     }
+}
+std::string ioOperationToString(size_t ioop)
+{
+    switch(ioop) {
+        case TOK_WRITE: return "write";
+        case TOK_READ: return "read";
+        default: return "<ERROR_IO_OP>";
+    }
+    return "<ERROR_IO_OP>";
 }
