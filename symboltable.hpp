@@ -42,6 +42,7 @@ public:
     size_t getNextLabelIndex();
     size_t pushNextLabelIndex();
     size_t popLabelIndex();
+    size_t peekLabelIndex();
     void setCurrentArraySize(std::tuple<size_t, size_t> bounds);
     std::tuple<size_t, size_t> getCurrentArraySize();
     bool isTypeArray();

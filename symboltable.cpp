@@ -175,6 +175,10 @@ size_t SymbolTable::popLabelIndex()
     this->labelStack.pop();
     return index;
 }
+size_t SymbolTable::peekLabelIndex()
+{   
+    return this->labelStack.top();
+}
 size_t SymbolTable::getNewTemporaryVariable(VarTypes type, std::string descriptor)
 {
     std::string name = fmt::format("$t{}", this->getNextGlobalTemporaryAndIncrement());

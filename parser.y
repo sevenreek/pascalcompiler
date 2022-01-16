@@ -239,46 +239,50 @@ statement:
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
             size_t expressionIndex = $2;
-            Symbol * expression = st->at(expressionIndex);
+            Symbol * expression = st->at(expressionIndex); // get temporary (or variable) behind expression
             if(expression->getVarType()==VarTypes::VT_REAL) {
-                expressionIndex = convertToInt(expressionIndex);
+                expressionIndex = convertToInt(expressionIndex); // need logical value so convert to int
                 expression = st->at(expressionIndex);
             }
-            std::string labelElse = fmt::format("lab{}_else", st->pushNextLabelIndex());
-            e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelElse), "");
-        } statement ELSE  {
+            std::string labelElse = fmt::format("lab{}_else", st->pushNextLabelIndex()); // generate a label for else and push it on label stack in SymbolTable
+            e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelElse), ""); // jump to else label if expression==0
+        } statement ELSE  { // write code for statement if true
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelElse = fmt::format("lab{}_else", st->popLabelIndex());
-            std::string labelAfter = fmt::format("lab{}_endif", st->pushNextLabelIndex());
-            e->generateJump(labelAfter);
-            e->generateLabel(labelElse);
-        } statement {
+            std::string labelElse = fmt::format("lab{}_else", st->popLabelIndex()); // get label for else from label stack
+            std::string labelAfter = fmt::format("lab{}_endif", st->pushNextLabelIndex()); // push a label for endif to the label stack
+            e->generateJump(labelAfter); // jump to after label
+            e->generateLabel(labelElse); // output else label
+        } statement { // write code for statement if false
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelAfter = fmt::format("lab{}_endif", st->popLabelIndex());
-            e->generateLabel(labelAfter);
+            std::string labelAfter = fmt::format("lab{}_endif", st->popLabelIndex()); // get label for endif from the label stack
+            e->generateLabel(labelAfter); // write the endif label
         }
-    |   WHILE expression {
+    |   WHILE  {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->pushNextLabelIndex());
-            std::string labelWhile = fmt::format("lab{}_while", st->pushNextLabelIndex());
-            size_t expressionIndex = $2;
+            std::string labelWhile = fmt::format("lab{}_while", st->pushNextLabelIndex()); // push whilestart label to the stack
+            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->pushNextLabelIndex()); // push enwhile label to the stack
+            e->generateLabel(labelWhile); // write label for while start
+        } expression {
+            SymbolTable *st = SymbolTable::getDefault();
+            Emitter *e = Emitter::getDefault();
+            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->peekLabelIndex()); // push enwhile label to the stack
+            size_t expressionIndex = $3;
             Symbol * expression = st->at(expressionIndex);
             if(expression->getVarType()==VarTypes::VT_REAL) {
-                expressionIndex = convertToInt(expressionIndex);
+                expressionIndex = convertToInt(expressionIndex); // need logical value of expression so convert to int if necessary
                 expression = st->at(expressionIndex);
             }
-            e->generateLabel(labelWhile);
-            e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelEndWhile), "");
-        } DO statement {
+            e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelEndWhile), ""); // jump to endwhile if expression==0
+        } DO statement { // write the statement to execute while true
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelWhile = fmt::format("lab{}_while", st->popLabelIndex());
-            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->popLabelIndex());
-            e->generateJump(labelWhile);
-            e->generateLabel(labelEndWhile);
+            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->popLabelIndex()); // pop label for endwhile
+            std::string labelWhile = fmt::format("lab{}_while", st->popLabelIndex()); // pop label for while start
+            e->generateJump(labelWhile); // jump to while begin, right before expression check
+            e->generateLabel(labelEndWhile); // write label for endwhile
 
         }
     |   write_statement
