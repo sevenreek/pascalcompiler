@@ -240,10 +240,12 @@ statement:
             Emitter *e = Emitter::getDefault();
             size_t expressionIndex = $2;
             Symbol * expression = st->at(expressionIndex); // get temporary (or variable) behind expression
+            /*
             if(expression->getVarType()==VarTypes::VT_REAL) {
                 expressionIndex = convertToInt(expressionIndex); // need logical value so convert to int
                 expression = st->at(expressionIndex);
             }
+            */
             std::string labelElse = fmt::format("lab{}_else", st->pushNextLabelIndex()); // generate a label for else and push it on label stack in SymbolTable
             e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelElse), ""); // jump to else label if expression==0
         } statement ELSE  { // write code for statement if true
@@ -271,10 +273,12 @@ statement:
             std::string labelEndWhile = fmt::format("lab{}_endwhile", st->peekLabelIndex()); // push enwhile label to the stack
             size_t expressionIndex = $3;
             Symbol * expression = st->at(expressionIndex);
+            /*
             if(expression->getVarType()==VarTypes::VT_REAL) {
                 expressionIndex = convertToInt(expressionIndex); // need logical value of expression so convert to int if necessary
                 expression = st->at(expressionIndex);
             }
+            */
             e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelEndWhile), ""); // jump to endwhile if expression==0
         } DO statement { // write the statement to execute while true
             SymbolTable *st = SymbolTable::getDefault();
@@ -368,7 +372,7 @@ procedure_statement:
                     fmt::print("Ignoring return value of function {}.", func->getDescriptor());
                 case FunctionTypes::FP_PROC:
                     e->generateTwoCodeInt("call", func->getAttribute());
-                    e->generateTwoCodeInt("incsp", fmt::format("{}", $4*4));
+                    e->generateTwoCodeInt("incsp", fmt::format("{}", $3*4));
                 break;
             }
         }

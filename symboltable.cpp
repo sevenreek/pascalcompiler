@@ -271,7 +271,7 @@ void SymbolTable::placeContextInMemory(VarTypes vartype)
         size_t as = std::get<0>(this->arrayBounds);
         size_t ae = std::get<1>(this->arrayBounds);
         sym->setArrayBounds({as,ae});
-        size_t arraySize = ((as==0)&&(ae==0))?0:((ae-as)?(ae-as):1); // 0 if end and start are 0; 1 if they are both same value; end-start if they are different
+        size_t arraySize = ((as==0)&&(ae==0))?0:(ae-as+1); // 0 if end and start are 0; 1 if they are both same value; end-start if they are different
         address_t addr = this->getNextAddressAndIncrement(sym->getVarType(), arraySize);
         if(arraySize) {
             fmt::print("\tPlacing array '{}[{}..{}]'({}) in memory @ {}.\n",
