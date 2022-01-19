@@ -246,44 +246,41 @@ statement:
                 expression = st->at(expressionIndex);
             }
             */
-            std::string labelElse = fmt::format("lab{}_else", st->pushNextLabelIndex()); // generate a label for else and push it on label stack in SymbolTable
+            std::string labelElse = fmt::format("lab{}else", st->pushNextLabelIndex()); // generate a label for else and push it on label stack in SymbolTable
             e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelElse), ""); // jump to else label if expression==0
         } statement ELSE  { // write code for statement if true
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelElse = fmt::format("lab{}_else", st->popLabelIndex()); // get label for else from label stack
-            std::string labelAfter = fmt::format("lab{}_endif", st->pushNextLabelIndex()); // push a label for endif to the label stack
+            std::string labelElse = fmt::format("lab{}else", st->popLabelIndex()); // get label for else from label stack
+            std::string labelAfter = fmt::format("lab{}endif", st->pushNextLabelIndex()); // push a label for endif to the label stack
             e->generateJump(labelAfter); // jump to after label
             e->generateLabel(labelElse); // output else label
         } statement { // write code for statement if false
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelAfter = fmt::format("lab{}_endif", st->popLabelIndex()); // get label for endif from the label stack
+            std::string labelAfter = fmt::format("lab{}endif", st->popLabelIndex()); // get label for endif from the label stack
             e->generateLabel(labelAfter); // write the endif label
         }
     |   WHILE  {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelWhile = fmt::format("lab{}_while", st->pushNextLabelIndex()); // push whilestart label to the stack
-            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->pushNextLabelIndex()); // push enwhile label to the stack
+            size_t whileIndex = st->getNextLabelIndex();
+            $1 = whileIndex;
+            std::string labelWhile = fmt::format("lab{}while", whileIndex); // push whilestart label to the stack
             e->generateLabel(labelWhile); // write label for while start
         } expression {
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->peekLabelIndex()); // push enwhile label to the stack
+            size_t endWhileIndex = st->getNextLabelIndex();
+            $2 = endWhileIndex;
+            std::string labelEndWhile = fmt::format("lab{}endwhile", endWhileIndex); // push enwhile label to the stack
             size_t expressionIndex = $3;
-            /*
-            if(expression->getVarType()==VarTypes::VT_REAL) {
-                expressionIndex = convertToInt(expressionIndex); // need logical value of expression so convert to int if necessary
-                expression = st->at(expressionIndex);
-            }
-            */
             e->generateCodeConst("je", expressionIndex, "#0", fmt::format("#{}",labelEndWhile), ""); // jump to endwhile if expression==0
         } DO statement { // write the statement to execute while true
             SymbolTable *st = SymbolTable::getDefault();
             Emitter *e = Emitter::getDefault();
-            std::string labelEndWhile = fmt::format("lab{}_endwhile", st->popLabelIndex()); // pop label for endwhile
-            std::string labelWhile = fmt::format("lab{}_while", st->popLabelIndex()); // pop label for while start
+            std::string labelEndWhile = fmt::format("lab{}endwhile", $2); // pop label for endwhile
+            std::string labelWhile = fmt::format("lab{}while", $1); // pop label for while start
             e->generateJump(labelWhile); // jump to while begin, right before expression check
             e->generateLabel(labelEndWhile); // write label for endwhile
 
@@ -311,7 +308,7 @@ io_arguments:
             Emitter *e = Emitter::getDefault();
             SymbolTable *st = SymbolTable::getDefault();
             std::string ioOperation = ioOperationToString($-1);
-            e->generateCode(ioOperation, $1, fmt::format("{}({})", ioOperation, st->at($1)->getDescriptor()));
+            e->generateCode(ioOperation, $3, fmt::format("{}({})", ioOperation, st->at($3)->getDescriptor()));
         }
     ;
 
@@ -344,7 +341,7 @@ variable:
             comment = fmt::format("CALC_ARRAY_OFFSET(({}-{})*{})", expression->getDescriptor(), arrayStart, varSize);
             e->generateCodeConst("mul", arrayIndexTemp, fmt::format("#{}", varSize), arrayIndexTemp, comment);
             comment = fmt::format("{}[{}]", array->getDescriptor(), expression->getDescriptor());
-            e->generateCodeConst("add", arrayIndexTemp, fmt::format("#{}", array->getAddress()), arrayIndexTemp, comment);
+            e->generateCodeConst("add", arrayIndexTemp, e->getSymbolAddress(array), arrayIndexTemp, comment);
             st->at(arrayIndexTemp)->setIsReference(true);
             st->at(arrayIndexTemp)->setVarType(array->getVarType()); // change to double if needed
             $$ = arrayIndexTemp;
@@ -437,9 +434,9 @@ expression:
             }
             std::string tempDescriptor = fmt::format("{}{}{}", e1->getDescriptor(), operatorTokenToString($2), e2->getDescriptor());
             size_t opResultIndex = st->getNewTemporaryVariable(VarTypes::VT_INT,  tempDescriptor);
-            std::string labelTrue = fmt::format("lab{}_true", st->getNextLabelIndex());
+            std::string labelTrue = fmt::format("lab{}true", st->getNextLabelIndex());
             std::string trueHash = fmt::format("#{}", labelTrue);
-            std::string labelAfter = fmt::format("lab{}_end", st->getNextLabelIndex());
+            std::string labelAfter = fmt::format("lab{}end", st->getNextLabelIndex());
             switch($2) {
                 case '=':
                     e->generateCodeConst("je", e1i, e2i, trueHash, "");
@@ -638,9 +635,9 @@ factor:
                 factor = st->at(factorIndex);
             }
             size_t opResultIndex = st->getNewTemporaryVariable(VarTypes::VT_INT,  fmt::format("!{}", factor->getDescriptor()));
-            std::string labelTrue = fmt::format("lab{}_totrue", st->getNextLabelIndex());
+            std::string labelTrue = fmt::format("lab{}totrue", st->getNextLabelIndex());
             std::string trueHash = fmt::format("#{}", labelTrue);
-            std::string labelAfter = fmt::format("lab{}_end", st->getNextLabelIndex());
+            std::string labelAfter = fmt::format("lab{}end", st->getNextLabelIndex());
             e->generateCodeConst("je", factorIndex, "#0", trueHash, "");
             e->generateCodeConst("mov", "#0", opResultIndex, "");
             e->generateRaw(fmt::format("\tjump.i #{}", labelAfter));

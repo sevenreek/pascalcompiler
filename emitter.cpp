@@ -224,6 +224,7 @@ void Emitter::exitTempOutput(size_t localStackSize, bool dumpToFile)
 {
     this->generateEnterProcedure(localStackSize);
     this->outputFile << this->outputTemp.str();
+    this->outputTemp.str(std::string()); // clear 
     this->currentOutput = &this->outputFile;
     this->generateProcedureReturn();
 }
