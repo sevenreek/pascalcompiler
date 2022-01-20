@@ -5,10 +5,6 @@ Emitter* Emitter::instance = nullptr;
 Emitter::Emitter(std::string filename) :
     outputFile(filename, std::fstream::out | std::fstream::trunc)
 {
-    if (Emitter::instance == nullptr)
-    {
-        Emitter::instance = this;
-    }
     this->currentOutput = &this->outputFile;
 }
 Emitter* Emitter::getDefault()

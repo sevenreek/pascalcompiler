@@ -6,3 +6,4 @@ parser.hpp
 *.out
 *.asm
 comp
+vm

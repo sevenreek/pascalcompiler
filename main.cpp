@@ -29,6 +29,6 @@ int main(int argc, char* argv[])
       fmt::print("\033[0;31m[error] at line {}: {}\033[0m\n", yylineno, e.what());
     }
     fmt::print("\033[32mCompiled successfully!\033[0m\n");
+    if(infilePointer) fclose(infilePointer);
     yylex_destroy();
-    exit(0);
 }
